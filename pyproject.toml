@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "medical data kit"
+version = "0.0.1"
+description = ""
+authors = ["Sitao Min <sitaomin1994@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pandas = "^2.2.2"
+kaggle = "^1.6.17"
+scikit-learn = "^1.5.2"
+pyreadr = "^0.5.2"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+pickleshare = "^0.7.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
