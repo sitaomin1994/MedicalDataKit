@@ -4,13 +4,19 @@ version = "0.0.1"
 description = ""
 authors = ["Sitao Min <sitaomin1994@gmail.com>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 pandas = "^2.2.2"
 kaggle = "^1.6.17"
 scikit-learn = "^1.5.2"
 pyreadr = "^0.5.2"
+matplotlib = "^3.9.2"
+pyunpack = "^0.3"
+patool = "^2.4.0"
+liac-arff = "^2.5.0"
+python-dotenv = "^1.0.1"
 
 
 [tool.poetry.group.dev.dependencies]
