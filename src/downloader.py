@@ -13,6 +13,8 @@ import io
 import pyreadr
 import shutil
 
+from config import DATA_DOWNLOAD_DIR
+
 
 class DownLoader(ABC):
 
@@ -48,99 +50,204 @@ class DownLoader(ABC):
 
 class UCIMLDownloader(DownLoader):
 
-    def __init__(self, url: str, file_name: str, header: bool = True):
+    def __init__(self, url: str):
         self.url = url
-        self.file_name = file_name
-        self.header = header
         super().__init__()
 
-    def _custom_download(self):
+    def _custom_download(self, data_dir: str):
         import requests
         import zipfile
-        import tempfile
         import io
         import os
-        import shutil
-        url = self.url
-        response = requests.get(url)
-        zip_content = io.BytesIO(response.content)  
-        temp_dir = tempfile.mkdtemp()
-        with zipfile.ZipFile(zip_content) as zip_ref:
-            zip_ref.extractall(temp_dir)
-        
-        file_name = self.file_name
-        file_path = os.path.join(temp_dir, file_name)
-        if file_name.endswith('.data'):
-            if self.header:
-                data = pd.read_csv(file_path)
-            else:
-                data = pd.read_csv(file_path, header=None)
-        
-        # remove temp_dir
-        shutil.rmtree(temp_dir)
 
-        return data
-        
+        try:
+            download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+
+            url = self.url
+            zipfile_name = url.split('/')[-1]
+            zipfile_path = os.path.join(download_dir, zipfile_name)
+            # check if the zip file exists
+            if not os.path.exists(zipfile_path):
+                # download data and unzip to download_dir
+                response = requests.get(url)
+                zip_content = io.BytesIO(response.content)
+                # unzip the zip file
+                with zipfile.ZipFile(zip_content) as zip_ref:
+                    zip_ref.extractall(download_dir)
+
+                # save response content to zipfile_path
+                with open(zipfile_path, 'wb') as f:
+                    f.write(response.content)
+                
+            # return True if the download is successful
+            return True
+        except Exception as e:
+            print(e)
+            return False
 
 
 class KaggleDownloader(DownLoader):
 
-    def __init__(self, url: str, api_key: str):
-        self.url = url
-        self.api_key = api_key
+    def __init__(self, dataset_name: str, file_names: list[str], download_all: bool = False):
+        self.dataset_name = dataset_name
+        self.file_names = file_names
+        self.download_all = download_all
         super().__init__()
         
-    def _custom_download(self):
-        pass
+    def _custom_download(self, data_dir: str):
+        import kaggle as kg
+        import os
+        import zipfile
+        from dotenv import load_dotenv
+        import os
+
+        try:
+            # load kaggle username and key from .env file
+            dotenv_path = '.env'
+            load_dotenv(dotenv_path)
+            kaggle_username = os.getenv('KAGGLE_USERNAME')
+            kaggle_key = os.getenv('KAGGLE_KEY')
+
+            # init kaggle api by setting kaggle.json
+            KaggleDownloader.init_on_kaggle(kaggle_username, kaggle_key)
+            kg.api.authenticate()
+
+            # download data based on the parameters    
+            download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
+            dataset_name = self.dataset_name
+            file_names = self.file_names
+            download_all = self.download_all
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+
+            # download all files as whole
+            if download_all:
+                zipfile_name = dataset_name.split('/')[-1] + '.zip'
+                zipfile_path = os.path.join(download_dir, zipfile_name)
+                if not os.path.exists(zipfile_name):
+                    kg.api.dataset_download_files(dataset_name, path=download_dir, unzip = False)
+                
+                # unzip zip file
+                zip_file_path = os.path.join(download_dir, zipfile_name)
+                print(zip_file_path)
+                with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                    zip_ref.extractall(download_dir)
+
+            # download only specific files by file_names
+            else:
+                for file_name in file_names:
+                    if not os.path.exists(os.path.join(download_dir, file_name)):
+                        kg.api.dataset_download_file(dataset_name, file_name, path=download_dir)
+
+            return True
+        except Exception as e:
+            print(e)
+            return False
+        
+    
+    @staticmethod
+    def init_on_kaggle(username, api_key):
+
+        import os
+        import json
+        import subprocess
+
+        # set kaggle config dir based on os
+        if os.name == 'nt':
+            # windows
+            KAGGLE_CONFIG_DIR = os.path.join(os.path.expandvars('%USERPROFILE%'), '.kaggle')
+        else:
+            KAGGLE_CONFIG_DIR = os.path.join(os.path.expandvars('$HOME'), '.kaggle')
+        
+        os.makedirs(KAGGLE_CONFIG_DIR, exist_ok = True)
+        api_dict = {"username":username, "key":api_key}
+        file_path = os.path.join(KAGGLE_CONFIG_DIR, 'kaggle.json')
+        print(file_path)
+        with open(file_path, "w", encoding='utf-8') as f:
+            json.dump(api_dict, f)
+        
+        # code for permission setting
+        # if os.name == 'nt':
+        #     # windows -> file path is different
+        #     cmd = f"chmod 600 {file_path}"
+        # else:
+        #     cmd = f"chmod 600 {KAGGLE_CONFIG_DIR}/kaggle.json"
+        # print(cmd)
+        # output = subprocess.check_output(cmd.split(" "))
+        # output = output.decode(encoding='UTF-8')
+        # print(output)
 
 
 class RDataDownloader(DownLoader):
 
-    def __init__(self, package_url: str, dataset_path: str):
+    def __init__(self, package_url: str, dataset_path_in_package: str):
         self.package_url = package_url
-        self.dataset_path = dataset_path
+        self.dataset_path_in_package = dataset_path_in_package
         super().__init__()
 
-    def _custom_download(self):
+    def _custom_download(self, data_dir: str):
         
-        # create a temporary directory
-        temp_dir = tempfile.mkdtemp()
-        try:
-            # download the package
-            response = requests.get(self.package_url)
-            tar_content = io.BytesIO(response.content)
-            
-            # extract the package
-            with tarfile.open(fileobj=tar_content, mode='r:gz') as tar:
-                tar.extractall(path=temp_dir)
-            
-            # read the .rda file
-            rda_path = os.path.join(temp_dir, self.dataset_path)
-            
-            # use pyreadr to read the .rda file
-            result = pyreadr.read_r(rda_path)
-            
-            # pyreadr returns a dictionary, we take the value of the first key as the DataFrame
-            self.data = next(iter(result.values()))
-        
-        finally:
-            # delete the temporary directory
-            shutil.rmtree(temp_dir)
-        
-        self.data.reset_index(drop=True, inplace=True)
-        
-        return self.data
+        download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+
+        dataset_path = self.dataset_path_in_package.split('/')[-1]
+
+        # if dataset_path exists, return True
+        if os.path.exists(os.path.join(download_dir, dataset_path)):
+            return True
+        # if dataset_path does not exist, download the package and extract the dataset
+        else:
+            # create a temporary directory
+            temp_dir = tempfile.mkdtemp()
+            error_happened = False
+            try:
+                # download the package
+                response = requests.get(self.package_url)
+                tar_content = io.BytesIO(response.content)
+                
+                # extract the package
+                with tarfile.open(fileobj=tar_content, mode='r:gz') as tar:
+                    tar.extractall(path=temp_dir)
+                
+                # read the .rda file
+                rda_path = os.path.join(temp_dir, self.dataset_path)
+
+                # copy the .rda file to download_dir
+                shutil.copy(rda_path, download_dir)
+                
+            except Exception as e:
+                print(e)
+                error_happened = True
+            finally:
+                # delete the temporary directory
+                shutil.rmtree(temp_dir)
+                return error_happened
 
 
 class OpenMLDownloader(DownLoader):
 
     def __init__(self, data_id: int):
         self.data_id = data_id
-        self.data = None
         super().__init__()
 
-    def _custom_download(self):
+    def _custom_download(self, data_dir: str):
 
-        X, y = fetch_openml(data_id=self.data_id, as_frame=True, return_X_y=True)
-        self.data = X.join(y)
-        return self.data
+        try:
+            download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+
+            X, y = fetch_openml(data_id=self.data_id, as_frame=True, return_X_y=True)
+            data = X.join(y)
+
+            # save the data to the specified path
+            data.to_csv(os.path.join(download_dir, 'data.csv'), index=False)
+
+            return True
+        
+        except Exception as e:
+            print(e)
+            return False

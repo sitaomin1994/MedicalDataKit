@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from abc import ABC, abstractmethod
 
 class Dataset(ABC):
@@ -12,10 +13,15 @@ class Dataset(ABC):
         # meta data for raw data
         self.num_rows = 0
         self.num_cols = 0
+        self.drop_features = []
         self.sensitive_features = []
+        # we define four type of features
         self.numerical_features = []
         self.ordinal_features = []
-        self.categorical_features = []
+        self.binary_features = []
+        self.multiclass_features = []
+        self.feature_codes = {}  # feature codes for categorical features - ordinal, binary, multiclass
+        # target feature
         self.target_feature = None
         self.target_type = None
         self.num_classes = None
@@ -25,8 +31,10 @@ class Dataset(ABC):
         self.num_rows_ = 0
         self.num_cols_ = 0
         self.sensitive_features_ = []
+        # for processed data, we just have two data types - either numerical or categorical
         self.numerical_features_ = []
         self.categorical_features_ = []
+        self.feature_codes_ = {}
         self.target_feature_ = None
         self.target_type_ = None
         self.num_classes_ = None
@@ -56,8 +64,14 @@ class Dataset(ABC):
         """
         Conduct basic processing for raw data
         """
+        data = data.reset_index(drop=True)
+        # drop unnecessary features
+        data.drop(columns=self.drop_features, inplace=True)
+        
         # check all columns are included in the meta data
-        assert len(self.numerical_features) + len(self.categorical_features) + len(self.ordinal_features) == len(data.columns) - 1
+        print(len(self.numerical_features) + len(self.ordinal_features) + len(self.binary_features) + len(self.multiclass_features))
+        print(len(data.columns) - 1)
+        assert len(self.numerical_features) + len(self.ordinal_features) + len(self.binary_features) + len(self.multiclass_features) == len(data.columns) - 1
 
         # reset index
         data.reset_index(drop=True, inplace=True)
@@ -66,10 +80,22 @@ class Dataset(ABC):
         data[self.numerical_features] = data[self.numerical_features].astype(float)
 
         # convert ordinal features to int type
-        data[self.ordinal_features] = data[self.ordinal_features].astype(int)
+        for feature in self.ordinal_features:
+            data[feature], codes = pd.factorize(data[feature], sort=True)
+            data[feature] = data[feature].replace(-1, np.nan)
+            self.feature_codes[feature] = dict(enumerate(codes))
+        
+        # convert binary features to int type
+        for feature in self.binary_features:
+            data[feature], codes = pd.factorize(data[feature], sort=True)
+            data[feature] = data[feature].replace(-1, np.nan)
+            self.feature_codes[feature] = dict(enumerate(codes))
 
-        # convert categorical features to int type
-        data[self.categorical_features] = data[self.categorical_features].astype(int)
+        # convert multiclass features to int type
+        for feature in self.multiclass_features:
+            data[feature], codes = pd.factorize(data[feature], sort=True)
+            data[feature] = data[feature].replace(-1, np.nan)
+            self.feature_codes[feature] = dict(enumerate(codes))
 
         # convert target variable dtype based on its type
         if self.target_type in ['multiclass', 'binary']:
@@ -99,11 +125,16 @@ class Dataset(ABC):
         print(f"Sensitive features: {self.sensitive_features}")
         print(f"Numerical features: {self.numerical_features}")
         print(f"Ordinal features: {self.ordinal_features}")
-        print(f"Categorical features: {self.categorical_features}")
+        print(f"Binary features: {self.binary_features}")
+        print(f"Multiclass features: {self.multiclass_features}")
         print(f"Target feature: {self.target_feature}")
-        print(f"Target type: {self.target_type}")
-        print(f"Number of classes: {self.num_classes}")
-        print(f"Target codes mapping: {self.target_codes_mapping}")
+        print(f"    Target type: {self.target_type}")
+        print(f"    Number of classes: {self.num_classes}")
+        print(f"    Target codes mapping: {self.target_codes_mapping}")
+        print(f"Feature codes (ordinal, binary, multiclass):")
+        for feature_type, features in [('ordinal', self.ordinal_features), ('binary', self.binary_features), ('multiclass', self.multiclass_features)]:
+            for feature in features:
+                print(f"    {feature} ({feature_type}): {self.feature_codes[feature]}")
 
     
     def get_missing_data_statistics(self):
@@ -127,12 +158,12 @@ class Dataset(ABC):
         print(f"Number of missing values: {self.num_missing_values}")
         print("Missing value statistics:")
         for feature, count in self.missing_value_stats.items():
-            print(f"Feature '{feature}': {count} missing values")
+            print(f"    {feature}: {count} missing values")
         print("\nMissing pattern statistics:")
-        print(f'Total missing patterns: {len(self.missing_pattern_stats)}')
-        print('Top 10 missing patterns:')
+        print(f'    Total missing patterns: {len(self.missing_pattern_stats)}')
+        print('    Top 10 missing patterns:')
         for pattern, count in list(self.missing_pattern_stats.items())[:10]:
-            print(f"Pattern '{pattern}': {count*100:.2f} %")
+            print(f"    Pattern '{pattern}': {count*100:.2f} %")
 
     def preprocess(
             self,
@@ -192,180 +223,6 @@ class Dataset(ABC):
         self.target_type_ = self.target_type
         self.num_classes_ = self.num_classes
         self.target_codes_mapping_ = self.target_codes_mapping
-
-
-from .downloader import OpenMLDownloader
-from .downloader import RDataDownloader
-
-class DermatologyDataset(Dataset):
-
-    def __init__(self):
-        super().__init__()
-
-    def load(self):
-        downloader = OpenMLDownloader(data_id=35)
-        raw_data = downloader.download()
-
-        # specify meta data
-        self.sensitive_features = ['Age']
-        self.numerical_features = ['Age']
-        self.ordinal_features = [col for col in raw_data.columns[:-1] if col not in self.numerical_features]
-        self.categorical_features = []
-        self.target_feature = raw_data.columns[-1]
-        self.target_type = 'multiclass'
-        
-        # basic processing
-        self.raw_data = self.basic_processing(raw_data)
-
-    def handle_missing_data(self, data: pd.DataFrame):
-        return data.dropna()
-    
-
-class SupportDataset(Dataset):
-
-    def __init__(self):
-        super().__init__()
-
-    def load(self):
-        downloader = RDataDownloader(dataset_path='casebase/data/support.rda', package_url = 'https://cran.r-project.org/src/contrib/casebase_0.10.6.tar.gz')
-        raw_data = downloader.download()
-
-        # specify meta data
-        self.sensitive_features = ['age', 'race', 'sex']
-        self.categorical_features = ['sex', 'dzgroup', 'dzclass', 'race', 'diabetes', 'dementia', 'ca']
-        self.target_feature = 'death'
-        self.target_type = 'binary'
-        self.numerical_features = [col for col in raw_data.columns if col not in self.categorical_features + [self.target_feature]]
-        self.ordinal_features = []
-
-        # basic processing
-        self.raw_data = self.basic_processing(raw_data)
-
-    def handle_missing_data(self, data: pd.DataFrame):
-        return data.dropna()
-
-    
-# todo: download and save data and avoid loading it every time -> check if the data is already downloaded
-# todo: add codes for categorical features
-# todo: kaggle data downloader - kaggle api key
-
-class KidneyDataset(Dataset):
-
-    def __init__(self):
-        super().__init__()
-
-    def load(self):
-        pass
-
-    def handle_missing_data(self, data: pd.DataFrame):
-        pass
-    
-    def custom_download(self):
-        import requests
-        import zipfile
-        import io
-        import tempfile
-        import os
-        import mimetypes
-        import patoolib
-        import arff
-        import pandas as pd
-        url = 'https://archive.ics.uci.edu/static/public/336/chronic+kidney+disease.zip'
-        response = requests.get(url)
-        print(response.headers.get('Content-Type'))
-        print(mimetypes.guess_type(url))
-        zip_content = io.BytesIO(response.content)
-        print(zip_content)
-        temp_dir = tempfile.mkdtemp()
-        with zipfile.ZipFile(zip_content) as zip_ref:
-            zip_ref.extractall(temp_dir)
-        
-        # uncompress rar file in temp_dir
-        rar_file_name = 'Chronic_Kidney_Disease.rar'
-        rar_file_path = os.path.join(temp_dir, rar_file_name)
-        patoolib.extract_archive(rar_file_path, outdir=temp_dir, interactive=False)
-        # remove rar file
-        os.remove(rar_file_path)
-
-        # read arff file
-        arff_file_path = os.path.join(temp_dir, 'Chronic_Kidney_Disease', 'chronic_kidney_disease_full.arff')
-        data = pd.read_csv(arff_file_path)
-
-        return data
-    
-
-
-class BreastCancerLjubljanaDataset(Dataset):
-
-    def __init__(self):
-        super().__init__()
-
-    def load(self):
-        pass
-
-    def handle_missing_data(self, data: pd.DataFrame):
-        pass
-
-    def custom_download(self):
-        import requests
-        import zipfile
-        import tempfile
-        import io
-        import os
-        import shutil
-        url = 'https://archive.ics.uci.edu/static/public/14/breast+cancer.zip'
-        response = requests.get(url)
-        zip_content = io.BytesIO(response.content)
-        temp_dir = tempfile.mkdtemp()
-        with zipfile.ZipFile(zip_content) as zip_ref:
-            zip_ref.extractall(temp_dir)
-        
-        file_name = 'breast-cancer.data'
-        file_path = os.path.join(temp_dir, file_name)
-        if file_name.endswith('.data'):
-            data = pd.read_csv(file_path, header=None)
-
-        # remove temp_dir
-        shutil.rmtree(temp_dir)
-
-        return data
-        
-class BreastCancerWisconsinDataset(Dataset):
-
-    def __init__(self):
-        super().__init__()
-
-    def load(self):
-        pass
-
-    def handle_missing_data(self, data: pd.DataFrame):
-        pass
-
-    def custom_download(self):
-        import requests
-        import zipfile
-        import tempfile
-        import io
-        import os
-        import shutil
-        url = 'https://archive.ics.uci.edu/static/public/17/breast+cancer+wisconsin+diagnostic.zip'
-        response = requests.get(url)
-        zip_content = io.BytesIO(response.content)  
-        temp_dir = tempfile.mkdtemp()
-        with zipfile.ZipFile(zip_content) as zip_ref:
-            zip_ref.extractall(temp_dir)
-        
-        print(os.listdir(temp_dir))
-        
-        file_name = 'wdbc.data'
-        file_path = os.path.join(temp_dir, file_name)
-        if file_name.endswith('.data'):
-            data = pd.read_csv(file_path, header=None)
-        
-        # remove temp_dir
-        shutil.rmtree(temp_dir)
-
-        return data
             
     
     
