@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 class Dataset(ABC):
 
     def __init__(self):
+        # todo: each feature should associated with a dictionary or class to store their properties
         
         # raw data and processed data
         self.raw_data: pd.DataFrame = None
@@ -15,17 +16,13 @@ class Dataset(ABC):
         self.num_cols = 0
         self.drop_features = []
         self.sensitive_features = []
-        # we define four type of features
+        self.target_features = []
+        # we classify features into four types
         self.numerical_features = []
         self.ordinal_features = []
         self.binary_features = []
         self.multiclass_features = []
         self.feature_codes = {}  # feature codes for categorical features - ordinal, binary, multiclass
-        # target feature
-        self.target_feature = None
-        self.target_type = None
-        self.num_classes = None
-        self.target_codes_mapping = None
 
         # meta data for processed data
         self.num_rows_ = 0
@@ -69,9 +66,7 @@ class Dataset(ABC):
         data.drop(columns=self.drop_features, inplace=True)
         
         # check all columns are included in the meta data
-        print(len(self.numerical_features) + len(self.ordinal_features) + len(self.binary_features) + len(self.multiclass_features))
-        print(len(data.columns) - 1)
-        assert len(self.numerical_features) + len(self.ordinal_features) + len(self.binary_features) + len(self.multiclass_features) == len(data.columns) - 1
+        assert len(self.numerical_features) + len(self.ordinal_features) + len(self.binary_features) + len(self.multiclass_features) == len(data.columns)
 
         # reset index
         data.reset_index(drop=True, inplace=True)
@@ -97,21 +92,12 @@ class Dataset(ABC):
             data[feature] = data[feature].replace(-1, np.nan)
             self.feature_codes[feature] = dict(enumerate(codes))
 
-        # convert target variable dtype based on its type
-        if self.target_type in ['multiclass', 'binary']:
-            self.num_classes = data[self.target_feature].nunique()
-            data[self.target_feature], self.target_codes_mapping = pd.factorize(data[self.target_feature], sort=True)
-            # store mapping as dict
-            self.target_codes_mapping = dict(enumerate(self.target_codes_mapping))
-        else:
-            self.num_classes = 0
-            # if target variable is numerical, directly convert to float
-            data[self.target_feature] = data[self.target_feature].astype(float)
-
         # move target variable to the end of the dataframe
-        data = data.drop(columns=[self.target_feature]).assign(**{self.target_feature: data[self.target_feature]})
+        for target_feature in self.target_features:
+            assert target_feature not in self.ordinal_features, "Target feature can only be numerical, binary, or multiclass"
+            data = data.drop(columns=[target_feature]).assign(**{target_feature: data[target_feature]})
         
-        # storenumber of rows and columns
+        # store number of rows and columns
         self.num_rows, self.num_cols = data.shape
 
         return data
@@ -127,14 +113,32 @@ class Dataset(ABC):
         print(f"Ordinal features: {self.ordinal_features}")
         print(f"Binary features: {self.binary_features}")
         print(f"Multiclass features: {self.multiclass_features}")
-        print(f"Target feature: {self.target_feature}")
-        print(f"    Target type: {self.target_type}")
-        print(f"    Number of classes: {self.num_classes}")
-        print(f"    Target codes mapping: {self.target_codes_mapping}")
+        print(f"Target features:")
+        for target_feature in self.target_features:
+            if target_feature in self.numerical_features:
+                target_type = 'numerical'
+            elif target_feature in self.binary_features:
+                target_type = 'binary'
+            elif target_feature in self.multiclass_features:
+                target_type = 'multiclass'
+            else:
+                raise ValueError(f"Target feature {target_feature} is not numerical, binary, or multiclass")
+            if target_type != 'numerical':
+                print(f"    - {target_feature} ({target_type}) => {self.feature_codes[target_feature]}")
+            else:
+                print(f"    - {target_feature} ({target_type})")
         print(f"Feature codes (ordinal, binary, multiclass):")
-        for feature_type, features in [('ordinal', self.ordinal_features), ('binary', self.binary_features), ('multiclass', self.multiclass_features)]:
+        for feature_type, features in [
+            ('ordinal', self.ordinal_features), 
+            ('binary', self.binary_features), 
+            ('multiclass', self.multiclass_features)
+        ]:
             for feature in features:
-                print(f"    {feature} ({feature_type}): {self.feature_codes[feature]}")
+                if feature not in self.target_features:
+                    if len(self.feature_codes[feature]) > 20:
+                        print(f"    - {feature} ({feature_type}): {len(self.feature_codes[feature])} categories")
+                    else:
+                        print(f"    - {feature} ({feature_type}): {self.feature_codes[feature]}")
 
     
     def get_missing_data_statistics(self):
