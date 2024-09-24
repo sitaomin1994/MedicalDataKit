@@ -57,6 +57,29 @@ class Dataset(ABC):
         """
         pass
 
+    def data_config(self):
+        target_var = self.target_features[0]
+        if target_var in self.numerical_features:
+            task_type = 'regression'
+        elif target_var in self.binary_features:
+            task_type = 'binary'
+        elif target_var in self.multiclass_features:
+            task_type = 'multiclass'
+        else:
+            raise ValueError(f"Target feature {target_var} is not numerical, binary, or multiclass")
+        
+        numerical_features = [item for item in self.numerical_features if item != target_var]
+        categorical_features = self.ordinal_features + self.binary_features + self.multiclass_features
+        categorical_features = [item for item in categorical_features if item != target_var]
+
+        return {
+            'target_var': target_var,
+            'sensitive_var': self.sensitive_features,
+            'task_type': task_type,
+            'numerical_features': numerical_features,
+            'categorical_features': categorical_features,
+        }
+
     def basic_processing(self, data: pd.DataFrame):
         """
         Conduct basic processing for raw data
