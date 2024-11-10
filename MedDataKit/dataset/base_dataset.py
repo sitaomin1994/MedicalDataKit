@@ -7,9 +7,9 @@ class Dataset(ABC):
     def __init__(self):
         # todo: each feature should associated with a dictionary or class to store their properties
         
-        # raw data and processed data
+        ############################################################################################
+        # raw data
         self.raw_data: pd.DataFrame = None
-        self.processed_data: pd.DataFrame = None
 
         # meta data for raw data
         self.num_rows = 0
@@ -17,6 +17,7 @@ class Dataset(ABC):
         self.drop_features = []
         self.sensitive_features = []
         self.target_features = []
+        
         # we classify features into four types
         self.numerical_features = []
         self.ordinal_features = []
@@ -24,23 +25,26 @@ class Dataset(ABC):
         self.multiclass_features = []
         self.feature_codes = {}  # feature codes for categorical features - ordinal, binary, multiclass
 
-        # meta data for processed data
-        self.num_rows_ = 0
-        self.num_cols_ = 0
-        self.sensitive_features_ = []
-        # for processed data, we just have two data types - either numerical or categorical
-        self.numerical_features_ = []
-        self.categorical_features_ = []
-        self.feature_codes_ = {}
-        self.target_feature_ = None
-        self.target_type_ = None
-        self.num_classes_ = None
-        self.target_codes_mapping_ = None
+        ############################################################################################
+        # ml-ready data
+        self.ml_ready_data: pd.DataFrame = None
+        
+        # meta data for ml-ready data
+        self.num_rows_mlready = 0
+        self.num_cols_mlready = 0
+        self.sensitive_features_mlready = []
+        
+        # for ml-ready data, we just have two data types - either numerical or categorical
+        self.numerical_features_mlready = []
+        self.categorical_features_mlready = []
+        self.feature_codes_mlready = {}             # feature codes for categorical features
+        self.target_feature_mlready = None          # target feature
+        self.target_type_mlready = None             # target type
+        self.num_classes_mlready = None             # number of classes
+        self.target_codes_mapping_mlready = None    # target codes mapping
 
         # missing data information
-        self.num_missing_values = 0
-        self.missing_value_stats = {}  # missing features with its missing values
-        self.missing_pattern_stats = {}  # missing patterns with its ratio
+        self.missing_data_cleaning_log = {}          # record the missing data cleaning steps for each feature
     
     @abstractmethod
     def load(self):
@@ -185,71 +189,41 @@ class Dataset(ABC):
         print(f"Number of missing values: {self.num_missing_values}")
         print("Missing value statistics:")
         for feature, count in self.missing_value_stats.items():
-            print(f"    {feature}: {count} missing values")
+            print(f"    {feature}: {count} ({count/self.num_rows*100:.2f}%) missing values")
         print("\nMissing pattern statistics:")
         print(f'    Total missing patterns: {len(self.missing_pattern_stats)}')
         print('    Top 10 missing patterns:')
         for pattern, count in list(self.missing_pattern_stats.items())[:10]:
             print(f"    Pattern '{pattern}': {count*100:.2f} %")
-
-    def preprocess(
-            self,
-            standardize: bool = False,
-            normalize: bool = False,
-            ordinal_as_numerical: bool = False,
-            one_hot_categorical: bool = False,
-            max_categories: int = 10
-    ):
+    
+    def get_ml_ready_data(self, task_name: str = None):
         """
-        Preprocess the raw data to get ML ready data
+        Preprocess the raw data to get ML ready data for a specific task
         """
+        raise NotImplementedError
         
-        self.processed_data = self.raw_data.copy()
+        # self.processed_data = self.raw_data.copy()
         
-        # missing data
-        self.processed_data = self.handle_missing_data(self.processed_data)
+        # # missing data
+        # self.processed_data = self.handle_missing_data(self.processed_data)
         
-        # standardization
-        if standardize:
-            from sklearn.preprocessing import StandardScaler
-            scaler = StandardScaler()
-            self.processed_data[self.numerical_features] = scaler.fit_transform(self.processed_data[self.numerical_features])
+        # # hanlding ordinal features - either consider them as numerical or categorical
+        # if ordinal_as_numerical:
+        #     self.numerical_features.extend(self.ordinal_features)
+        #     self.ordinal_features = []
+        # else:
+        #     self.categorical_features.extend(self.ordinal_features)
+        #     self.ordinal_features = []
         
-        # normalization
-        if normalize:
-            from sklearn.preprocessing import MinMaxScaler
-            scaler = MinMaxScaler()
-            self.processed_data[self.numerical_features] = scaler.fit_transform(self.processed_data[self.numerical_features])
-        
-        # hanlding ordinal features - either consider them as numerical or categorical
-        if ordinal_as_numerical:
-            self.numerical_features.extend(self.ordinal_features)
-            self.ordinal_features = []
-        else:
-            self.categorical_features.extend(self.ordinal_features)
-            self.ordinal_features = []
-        
-        # one-hot encoding for categorical features
-        if one_hot_categorical and len(self.categorical_features) > 0:
-            from sklearn.preprocessing import OneHotEncoder
-            encoder = OneHotEncoder(sparse=False, handle_unknown='ignore', max_categories=max_categories)
-            encoded_features = encoder.fit_transform(self.processed_data[self.categorical_features])
-            encoded_feature_names = encoder.get_feature_names_out(self.categorical_features)
-            encoded_df = pd.DataFrame(encoded_features, columns=encoded_feature_names, index=self.processed_data.index)
-            self.processed_data = pd.concat([self.processed_data.drop(columns=self.categorical_features), encoded_df], axis=1)
-        
-            # update categorical features
-            self.categorical_features = encoded_feature_names.tolist()
-        
-        # get meta data for processed data
-        self.num_rows_, self.num_cols_ = self.processed_data.shape
-        self.sensitive_features_ = self.sensitive_features
-        self.numerical_features_ = self.numerical_features
-        self.categorical_features_ = self.categorical_features
-        self.target_feature_ = self.target_feature
-        self.target_type_ = self.target_type
-        self.num_classes_ = self.num_classes
-        self.target_codes_mapping_ = self.target_codes_mapping
+        # # get meta data for processed data
+        # self.num_rows_, self.num_cols_ = self.processed_data.shape
+        # self.sensitive_features_ = self.sensitive_features
+        # self.numerical_features_ = self.numerical_features
+        # self.categorical_features_ = self.categorical_features
+        # self.target_feature_ = self.target_feature
+        # self.target_type_ = self.target_type
+        # self.num_classes_ = self.num_classes
+        # self.target_codes_mapping_ = self.target_codes_mapping
             
     
     

@@ -13,7 +13,7 @@ import io
 import pyreadr
 import shutil
 
-from config import DATA_DOWNLOAD_DIR
+from config import DATA_DOWNLOAD_DIR, DATA_DIR
 
 
 class DownLoader(ABC):
@@ -252,3 +252,14 @@ class OpenMLDownloader(DownLoader):
         except Exception as e:
             print(e)
             return False
+        
+        
+class LocalDownloader(DownLoader):
+
+    def __init__(self, local_data_dir: str, file_names: list[str]):
+        self.local_data_dir = local_data_dir
+        self.file_names = file_names
+        super().__init__()
+
+    def _custom_download(self, data_dir: str):
+        pass
