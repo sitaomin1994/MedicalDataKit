@@ -166,6 +166,14 @@ class Dataset(ABC):
                         print(f"    - {feature} ({feature_type}): {len(self.feature_codes[feature])} categories")
                     else:
                         print(f"    - {feature} ({feature_type}): {self.feature_codes[feature]}")
+        
+        print(f"Feature Groups:")
+        if hasattr(self, 'feature_groups'):
+            for feature_group, features in self.feature_groups.items():
+                if len(features) > 6:
+                    print(f"    - {feature_group}: {len(features)} features (e.g., {','.join(features[:3])} ... {','.join(features[-3:])})")
+                else:
+                    print(f"    - {feature_group}: {len(features)} features ({','.join(features)})")
 
     
     def get_missing_data_statistics(self):

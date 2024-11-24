@@ -991,53 +991,18 @@ class GENE3494Dataset(Dataset):
         }
                 
         if task_name is None:
-            task_name = 'lethal_outcome'
+            task_name = 'DSS_EVENT'
         
-        if task_name == 'lethal_outcome':
+        if task_name == 'DSS_EVENT':
             
             # specify target and task type
-            target = 'LET_IS'
+            target = 'DSS_EVENT'
             task_type = 'classification'
             num_classes = data[target].nunique()
             
             # specify drop features
             drop_features = self.target_features.copy()
-            drop_features.remove('LET_IS')
-            
-        elif task_name == 'lethal_outcome_binary':
-            
-            # specify target and task type
-            data['LET_IS_binary'] = data[target].apply(lambda x: 0 if x == 0 else 1)
-            target = 'LET_IS_binary'
-            task_type = 'classification'
-            num_classes = 2
-            
-            # specify drop features
-            drop_features = self.target_features.copy()
-            
-        elif task_name == 'chronic_heart_failure':
-            
-            # specify target and task type
-            target = 'ZSN'
-            task_type = 'classification'
-            num_classes = 2
-            
-            # specify drop features
-            drop_features = self.target_features.copy()
-            drop_features.remove('ZSN')
-            
-        elif task_name == 'num_complications':
-            
-            # specify target and task type
-            complications = self.target_features.copy()
-            complications.remove('LET_IS')
-            data['num_complications'] = data.apply(lambda row: sum(row[complications]), axis = 1)
-            target = 'num_complications'
-            task_type = 'regression'
-            num_classes = None
-            
-            # specify drop features
-            drop_features = self.target_features.copy()
+            drop_features.remove('DSS_EVENT')
         else:
             raise ValueError(f"Task {task_name} is not supported")
         
@@ -1063,7 +1028,7 @@ class GENE3494Dataset(Dataset):
         ########################################################################################
         data, missing_data_info = basic_missing_mitigation(data, threshold1 = 0.15)
         
-        data_type_info = update_data_type_info(data, data_type_info)
+        data_type_info = update_data_type_info(data, data_type_info, target)
         numerical_features = data_type_info['numerical_feature']
         categorical_features = data_type_info['categorical_feature']
         
@@ -1075,7 +1040,7 @@ class GENE3494Dataset(Dataset):
         # data, data_encoding_info = basic_categorical_encoding(data, categorical_features)
         # print(data_encoding_info)
         
-        data_type_info = update_data_type_info(data, data_type_info)
+        data_type_info = update_data_type_info(data, data_type_info, target)
         numerical_features = data_type_info['numerical_feature']
         categorical_features = data_type_info['categorical_feature']
         
