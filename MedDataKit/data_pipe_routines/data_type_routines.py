@@ -1,6 +1,9 @@
 import pandas as pd
 from typing import List, Tuple
 import numpy as np
+from abc import ABC, abstractmethod
+
+from MedDataKit.utils import update_feature_type
 
 def basic_data_type_formulation(
     data: pd.DataFrame,
@@ -70,4 +73,51 @@ def update_data_type_info(data: pd.DataFrame, data_type_info: dict, target_col: 
     data_type_info['categorical_feature'] = new_categorical_features
     
     return data_type_info
+
+
+class FeatureTypeHandler(ABC):
     
+    def __init__(self):
+        pass
+    
+    @abstractmethod
+    def handle_feature_type(
+        self, data: pd.DataFrame, data_config: dict, **kwargs
+    ) -> Tuple[pd.DataFrame, list, list]:
+        pass
+
+
+class BasicFeatureTypeHandler(FeatureTypeHandler):
+    
+    def __init__(
+        self,
+        ordinal_as_numerical: bool,
+    ):
+        
+        self.ordinal_as_numerical = ordinal_as_numerical
+    
+    def handle_feature_type(
+        self, data: pd.DataFrame, data_config: dict, **kwargs
+    ) -> Tuple[pd.DataFrame, list, list]:
+        
+        # determine numerical and categorical features
+        if self.ordinal_as_numerical:
+            numerical_features = data_config['numerical_features'] + data_config['ordinal_features']
+            categorical_features = data_config['multiclass_features'] + data_config['binary_features']
+        else:
+            numerical_features = data_config['numerical_features']
+            categorical_features = (
+                data_config['multiclass_features'] + data_config['binary_features'] 
+                + data_config['ordinal_features']
+            )
+        
+        # remove target feature from numerical and categorical features
+        target_feature = data_config['target']
+        
+        if target_feature in numerical_features:
+            numerical_features.remove(target_feature)
+        if target_feature in categorical_features:
+            categorical_features.remove(target_feature)
+        
+        return data, numerical_features, categorical_features
+

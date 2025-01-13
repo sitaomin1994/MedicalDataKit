@@ -12,8 +12,14 @@ import requests
 import io
 import pyreadr
 import shutil
+import requests
+import zipfile
+import io
+import os
+import kaggle as kg
+from dotenv import load_dotenv
 
-from config import DATA_DOWNLOAD_DIR, DATA_DIR
+from config import DATA_DIR, DATA_DOWNLOAD_DIR
 
 
 class DownLoader(ABC):
@@ -55,31 +61,27 @@ class UCIMLDownloader(DownLoader):
         super().__init__()
 
     def _custom_download(self, data_dir: str):
-        import requests
-        import zipfile
-        import io
-        import os
 
         try:
-            download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
+            download_dir = os.path.join(data_dir)
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
 
             url = self.url
             zipfile_name = url.split('/')[-1]
             zipfile_path = os.path.join(download_dir, zipfile_name)
-            # check if the zip file exists
+            # check if the zip file exists, if not, download and save zip file
             if not os.path.exists(zipfile_path):
                 # download data and unzip to download_dir
                 response = requests.get(url)
-                zip_content = io.BytesIO(response.content)
-                # unzip the zip file
-                with zipfile.ZipFile(zip_content) as zip_ref:
-                    zip_ref.extractall(download_dir)
-
+                
                 # save response content to zipfile_path
                 with open(zipfile_path, 'wb') as f:
                     f.write(response.content)
+
+            # unzip the zip file
+            with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
+                zip_ref.extractall(download_dir)
                 
             # return True if the download is successful
             return True
@@ -89,19 +91,31 @@ class UCIMLDownloader(DownLoader):
 
 
 class KaggleDownloader(DownLoader):
+    
+    """
+    Downloader for Kaggle datasets
+    
+    Args:
+        dataset_name: str, name of the dataset - e.g 'elhamnasarian/nasarian-cad-dataset
+        file_names: list[str], names of the files to download
+        download_all: bool, whether to download all files
+    
+    """
 
-    def __init__(self, dataset_name: str, file_names: list[str], download_all: bool = False):
+    def __init__(
+        self, dataset_name: str, 
+        file_names: list[str], 
+        download_all: bool = False,
+        competition: bool = False
+    ):
+        
         self.dataset_name = dataset_name
         self.file_names = file_names
         self.download_all = download_all
+        self.competition = competition
         super().__init__()
         
     def _custom_download(self, data_dir: str):
-        import kaggle as kg
-        import os
-        import zipfile
-        from dotenv import load_dotenv
-        import os
 
         try:
             # load kaggle username and key from .env file
@@ -115,33 +129,53 @@ class KaggleDownloader(DownLoader):
             kg.api.authenticate()
 
             # download data based on the parameters    
-            download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
-            dataset_name = self.dataset_name
-            file_names = self.file_names
-            download_all = self.download_all
+            download_dir = os.path.join(data_dir)
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
+            
+            if not self.competition:
+                dataset_name = self.dataset_name
+                file_names = self.file_names
+                download_all = self.download_all
 
-            # download all files as whole
-            if download_all:
-                zipfile_name = dataset_name.split('/')[-1] + '.zip'
-                zipfile_path = os.path.join(download_dir, zipfile_name)
-                if not os.path.exists(zipfile_name):
-                    kg.api.dataset_download_files(dataset_name, path=download_dir, unzip = False)
-                
-                # unzip zip file
-                zip_file_path = os.path.join(download_dir, zipfile_name)
-                print(zip_file_path)
-                with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                    zip_ref.extractall(download_dir)
-
-            # download only specific files by file_names
+                # download all files as whole
+                if download_all:
+                    zipfile_name = dataset_name.split('/')[-1] + '.zip'
+                    zipfile_path = os.path.join(download_dir, zipfile_name)
+                    if not os.path.exists(zipfile_name):
+                        kg.api.dataset_download_files(dataset_name, path=download_dir, unzip = False)
+                    
+                    # unzip zip file
+                    zip_file_path = os.path.join(download_dir, zipfile_name)
+                    print(zip_file_path)
+                    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                        zip_ref.extractall(download_dir)
+                # download only specific files by file_names
+                else:
+                    for file_name in file_names:
+                        if not os.path.exists(os.path.join(download_dir, file_name)):
+                            kg.api.dataset_download_file(dataset_name, file_name, path=download_dir)
             else:
-                for file_name in file_names:
-                    if not os.path.exists(os.path.join(download_dir, file_name)):
-                        kg.api.dataset_download_file(dataset_name, file_name, path=download_dir)
-                        
+                competition_name = self.dataset_name
+                file_names = self.file_names
+                download_all = self.download_all
 
+                if download_all:
+                    zipfile_name = competition_name.split('/')[-1] + '.zip'
+                    zipfile_path = os.path.join(download_dir, zipfile_name)
+                    if not os.path.exists(zipfile_name):
+                        kg.api.competition_download_files(competition_name, path=download_dir, quiet = False)
+                    
+                    # unzip zip file
+                    zip_file_path = os.path.join(download_dir, zipfile_name)
+                    print(zip_file_path)
+                    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                        zip_ref.extractall(download_dir)
+                else:
+                    for file_name in file_names:
+                        if not os.path.exists(os.path.join(download_dir, file_name)):
+                            kg.api.competition_download_file(competition_name, file_name, path=download_dir)
+                        
             return True
         except Exception as e:
             print(e)

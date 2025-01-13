@@ -17,6 +17,7 @@ pyunpack = "^0.3"
 patool = "^2.4.0"
 liac-arff = "^2.5.0"
 python-dotenv = "^1.0.1"
+openpyxl = "^3.1.5"
 
 
 [tool.poetry.group.dev.dependencies]

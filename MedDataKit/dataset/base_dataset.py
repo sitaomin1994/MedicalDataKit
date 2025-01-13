@@ -1,244 +1,330 @@
 import pandas as pd
 import numpy as np
 from abc import ABC, abstractmethod
+from MedDataKit.utils import column_check
+from dataclasses import dataclass, asdict
+from typing import Dict, Any, Optional, Tuple
+
+from MedDataKit.dataset.base_raw_dataset import RawDataset
+from MedDataKit.dataset.base_ml_task_dataset import MLTaskDataset, MLTaskPreparationConfig
+from MedDataKit.utils import update_feature_type
 
 class Dataset(ABC):
-
-    def __init__(self):
-        # todo: each feature should associated with a dictionary or class to store their properties
-        
-        ############################################################################################
-        # raw data
-        self.raw_data: pd.DataFrame = None
-
-        # meta data for raw data
-        self.num_rows = 0
-        self.num_cols = 0
-        self.drop_features = []
-        self.sensitive_features = []
-        self.target_features = []
-        
-        # we classify features into four types
-        self.numerical_features = []
-        self.ordinal_features = []
-        self.binary_features = []
-        self.multiclass_features = []
-        self.feature_codes = {}  # feature codes for categorical features - ordinal, binary, multiclass
-
-        ############################################################################################
-        # ml-ready data
-        self.ml_ready_data: pd.DataFrame = None
-        
-        # meta data for ml-ready data
-        self.num_rows_mlready = 0
-        self.num_cols_mlready = 0
-        self.sensitive_features_mlready = []
-        
-        # for ml-ready data, we just have two data types - either numerical or categorical
-        self.numerical_features_mlready = []
-        self.categorical_features_mlready = []
-        self.feature_codes_mlready = {}             # feature codes for categorical features
-        self.target_feature_mlready = None          # target feature
-        self.target_type_mlready = None             # target type
-        self.num_classes_mlready = None             # number of classes
-        self.target_codes_mapping_mlready = None    # target codes mapping
-
-        # missing data information
-        self.missing_data_cleaning_log = {}          # record the missing data cleaning steps for each feature
     
-    @abstractmethod
-    def load(self):
-        """
-        Load dataset as raw data and specify meta data information such as num_cols, num_rows, num_classes, 
-        numerical_features, categorical_features, target_feature
-        """
-        pass
-
-    @abstractmethod
-    def handle_missing_data(self, data: pd.DataFrame):
-        """
-        Handle missing data in the dataset
-        """
-        pass
-
-    def data_config(self):
-        target_var = self.target_features[0]
-        if target_var in self.numerical_features:
-            task_type = 'regression'
-        elif target_var in self.binary_features:
-            task_type = 'binary'
-        elif target_var in self.multiclass_features:
-            task_type = 'multiclass'
-        else:
-            raise ValueError(f"Target feature {target_var} is not numerical, binary, or multiclass")
+    def __init__(
+        self, 
+        name: str, 
+        description: str,
+        collection_year: int = None,
+        subject_area: str = None,
+        url: str = None,
+        download_link: str = None,
+        notes: str = None,
+        data_type: str = None
+    ):
         
-        numerical_features = [item for item in self.numerical_features if item != target_var]
-        categorical_features = self.ordinal_features + self.binary_features + self.multiclass_features
-        categorical_features = [item for item in categorical_features if item != target_var]
-
-        return {
-            'target_var': target_var,
-            'sensitive_var': self.sensitive_features,
-            'task_type': task_type,
+        # Dataset Information
+        self.name = name
+        self.description = description
+        self.collection_year = collection_year
+        self.subject_area = subject_area
+        self.url = url
+        self.download_link = download_link
+        self.notes = notes
+        self.data_type = data_type
+        # Raw Dataset
+        self.raw_dataset: RawDataset = None                    # raw dataset
+        
+        # ML Task Dataset
+        self.ml_task_prep_config: MLTaskPreparationConfig = None              # ml task dataset configuration
+        self.ml_task_dataset: MLTaskDataset = None            # ml task dataset
+        
+    @property
+    def data_processing_config(self):
+        return asdict(self.ml_task_config)
+    
+    def load_raw_data(self):
+        """
+        Load raw dataset and specify meta data information
+        """
+        raw_data = self._load_raw_data()
+        meta_data = self._set_raw_data_config(raw_data)
+        
+        assert (
+            'numerical_features' in meta_data and 
+            'binary_features' in meta_data and 
+            'multiclass_features' in meta_data and 
+            'ordinal_features' in meta_data and 
+            'ordinal_feature_order_dict' in meta_data
+        ), "Meta data structure is not correct. numerical_features, binary_features," \
+        "multiclass_features, ordinal_features, and ordinal_feature_order_dict must be specified in meta data"
+        
+        assert (
+            'target_features' in meta_data and 
+            'sensitive_features' in meta_data and 
+            'drop_features' in meta_data and 
+            'feature_groups' in meta_data and 
+            'task_names' in meta_data
+        ), "Meta data structure is not correct. target_features, sensitive_features, drop_features,"\
+        "feature_groups, and task_names must be specified in meta data"
+        
+        # Create raw dataset based on raw dataframe and meta data
+        self.raw_dataset = RawDataset(raw_data, **meta_data)
+        
+        return self.raw_dataset.get_data()
+    
+    def get_task_names(self):
+        """
+        Get all task names
+        """
+        try:
+            return self.raw_dataset.task_names
+        except:
+            raise ValueError("Raw dataset is not loaded")
+    
+    def generate_ml_task_dataset(
+        self, task_name: str = None, config: dict = None, verbose: bool = False
+    ) -> pd.DataFrame:
+        """
+        Generate ml-ready data for a specific task and specify corresponding meta data information
+        """
+        
+        ##########################################################################################################
+        # ML task preparation configuration
+        if config is None:
+            config = {}
+        
+        self.ml_task_prep_config = MLTaskPreparationConfig(**config)
+        
+        if verbose:
+            print(asdict(self.ml_task_prep_config))
+        
+        ##########################################################################################################
+        # Get copy of raw data
+        raw_data = self.raw_dataset.get_data().copy()
+        raw_data_config = self.raw_dataset.raw_data_config
+        
+        if verbose:
+            print("Raw data shape: ", raw_data.shape)
+        
+        ##########################################################################################################
+        # Set target variable based on task name
+        if task_name is None:
+            task_name = raw_data_config['task_names'][0]
+        drop_unused_targets = self.ml_task_prep_config.drop_unused_targets
+        raw_data, target_info = self._set_target_feature(
+            raw_data, raw_data_config, task_name, drop_unused_targets
+        )
+        
+        if verbose:
+            print('After setting target feature: ', raw_data.shape)
+        
+        assert (
+            'target' in target_info and 
+            'task_type' in target_info and
+             target_info['task_type'] in ['classification', 'regression', 'survival']
+        ), "Target information is not correct. target, task_type must be specified in target_info"
+        
+        raw_data_config.update(target_info)
+        
+        ##########################################################################################################
+        # Feature Type Specification and Engineering
+        ml_data, feature_config = self._feature_engineering(raw_data, raw_data_config, self.ml_task_prep_config)
+        
+        assert (
+            'numerical_features' in feature_config and
+            'categorical_features' in feature_config
+        ), "Feature engineering configuration is not correct. " \
+            "numerical_features, categorical_features, " \
+            "must be specified in feature_config"
+        
+        # update feature type
+        target_feature = target_info['target']
+        numerical_features = feature_config['numerical_features']
+        categorical_features = feature_config['categorical_features']
+        numerical_features, categorical_features = update_feature_type(
+            ml_data, numerical_features, categorical_features, target_feature
+        )
+        
+        if verbose:
+            print('After feature engineering: ', ml_data.shape)
+        
+        ##########################################################################################################
+        # Handle missing data
+        missing_strategy = self.ml_task_prep_config.missing_strategy
+        missing_drop_thres = self.ml_task_prep_config.missing_drop_thres
+        
+        ml_data, missing_data_info = self.handle_missing_data(
+            ml_data, missing_strategy, missing_drop_thres, categorical_features
+        )
+        # update feature type
+        numerical_features, categorical_features = update_feature_type(
+            ml_data, numerical_features, categorical_features, target_feature
+        )
+        
+        if verbose:
+            print('After handling missing data: ', ml_data.shape)
+        
+        ##########################################################################################################
+        # Create ML task dataset
+        ml_data_config = {
             'numerical_features': numerical_features,
             'categorical_features': categorical_features,
+            'target': target_feature,
+            'task_type': target_info['task_type'],
         }
-
-    def basic_processing(self, data: pd.DataFrame):
-        """
-        Conduct basic processing for raw data
-        """
-        data = data.reset_index(drop=True)
-        # drop unnecessary features
-        data.drop(columns=self.drop_features, inplace=True)
         
-        # check all columns are included in the meta data
-        assert len(self.numerical_features) + len(self.ordinal_features) + len(self.binary_features) + len(self.multiclass_features) == len(data.columns)
-
-        # reset index
-        data.reset_index(drop=True, inplace=True)
-
-        # convert numerical features to float type
-        data[self.numerical_features] = data[self.numerical_features].astype(float)
-
-        # convert ordinal features to int type
-        for feature in self.ordinal_features:
-            data[feature], codes = pd.factorize(data[feature], sort=True)
-            data[feature] = data[feature].replace(-1, np.nan)
-            self.feature_codes[feature] = dict(enumerate(codes))
+        self.ml_task_dataset = MLTaskDataset(
+            ml_data, 
+            task_name,
+            numerical_encoding=self.ml_task_prep_config.numerical_encoding,
+            categorical_encoding=self.ml_task_prep_config.categorical_encoding,
+            **ml_data_config
+        )
         
-        # convert binary features to int type
-        for feature in self.binary_features:
-            data[feature], codes = pd.factorize(data[feature], sort=True)
-            data[feature] = data[feature].replace(-1, np.nan)
-            self.feature_codes[feature] = dict(enumerate(codes))
+        if verbose:
+            print('Final ml task dataset shape: ', self.ml_task_dataset.data.shape)
 
-        # convert multiclass features to int type
-        for feature in self.multiclass_features:
-            data[feature], codes = pd.factorize(data[feature], sort=True)
-            data[feature] = data[feature].replace(-1, np.nan)
-            self.feature_codes[feature] = dict(enumerate(codes))
-
-        # move target variable to the end of the dataframe
-        for target_feature in self.target_features:
-            assert target_feature not in self.ordinal_features, "Target feature can only be numerical, binary, or multiclass"
-            data = data.drop(columns=[target_feature]).assign(**{target_feature: data[target_feature]})
-        
-        # store number of rows and columns
-        self.num_rows, self.num_cols = data.shape
-
-        return data
-
-    def show_meta_data(self):
-        """
-        Show meta data for raw data
-        """
-        print(f"Number of rows: {self.num_rows}")
-        print(f"Number of columns: {self.num_cols}")
-        print(f"Sensitive features: {self.sensitive_features}")
-        print(f"Numerical features: {self.numerical_features}")
-        print(f"Ordinal features: {self.ordinal_features}")
-        print(f"Binary features: {self.binary_features}")
-        print(f"Multiclass features: {self.multiclass_features}")
-        print(f"Target features:")
-        for target_feature in self.target_features:
-            if target_feature in self.numerical_features:
-                target_type = 'numerical'
-            elif target_feature in self.binary_features:
-                target_type = 'binary'
-            elif target_feature in self.multiclass_features:
-                target_type = 'multiclass'
-            else:
-                raise ValueError(f"Target feature {target_feature} is not numerical, binary, or multiclass")
-            if target_type != 'numerical':
-                print(f"    - {target_feature} ({target_type}) => {self.feature_codes[target_feature]}")
-            else:
-                print(f"    - {target_feature} ({target_type})")
-        print(f"Feature codes (ordinal, binary, multiclass):")
-        for feature_type, features in [
-            ('ordinal', self.ordinal_features), 
-            ('binary', self.binary_features), 
-            ('multiclass', self.multiclass_features)
-        ]:
-            for feature in features:
-                if feature not in self.target_features:
-                    if len(self.feature_codes[feature]) > 20:
-                        print(f"    - {feature} ({feature_type}): {len(self.feature_codes[feature])} categories")
-                    else:
-                        print(f"    - {feature} ({feature_type}): {self.feature_codes[feature]}")
-        
-        print(f"Feature Groups:")
-        if hasattr(self, 'feature_groups'):
-            for feature_group, features in self.feature_groups.items():
-                if len(features) > 6:
-                    print(f"    - {feature_group}: {len(features)} features (e.g., {','.join(features[:3])} ... {','.join(features[-3:])})")
-                else:
-                    print(f"    - {feature_group}: {len(features)} features ({','.join(features)})")
-
+        return self.ml_task_dataset.data
     
-    def get_missing_data_statistics(self):
+    def handle_missing_data(
+        self, 
+        data: pd.DataFrame, 
+        missing_strategy: str,
+        missing_drop_thres: float,
+        categorical_features: list
+    ) -> Tuple[pd.DataFrame, dict]:
         """
-        Get missing data statistics
-        """
-        # get missing data statistics
-        self.num_missing_values = self.raw_data.isnull().sum().sum()
-        self.missing_feature_table = self.raw_data.isnull().sum()
-        self.missing_value_stats = self.missing_feature_table[self.missing_feature_table > 0].to_dict()
+        Handle missing data
         
-        # missing pattern statistics
-        mask = self.raw_data.isnull()
-        pattern_counts = mask.apply(lambda x: ''.join(x.astype(int).astype(str)), axis=1).value_counts(normalize=True, sort=True)
-        self.missing_pattern_stats = pattern_counts.to_dict()
-
-    def show_missing_data_statistics(self):
-        """
-        Show missing data statistics
-        """
-        print(f"Number of missing values: {self.num_missing_values}")
-        print("Missing value statistics:")
-        for feature, count in self.missing_value_stats.items():
-            print(f"    {feature}: {count} ({count/self.num_rows*100:.2f}%) missing values")
-        print("\nMissing pattern statistics:")
-        print(f'    Total missing patterns: {len(self.missing_pattern_stats)}')
-        print('    Top 10 missing patterns:')
-        for pattern, count in list(self.missing_pattern_stats.items())[:10]:
-            print(f"    Pattern '{pattern}': {count*100:.2f} %")
-    
-    def get_ml_ready_data(self, task_name: str = None):
-        """
-        Preprocess the raw data to get ML ready data for a specific task
-        """
-        raise NotImplementedError
-        
-        # self.processed_data = self.raw_data.copy()
-        
-        # # missing data
-        # self.processed_data = self.handle_missing_data(self.processed_data)
-        
-        # # hanlding ordinal features - either consider them as numerical or categorical
-        # if ordinal_as_numerical:
-        #     self.numerical_features.extend(self.ordinal_features)
-        #     self.ordinal_features = []
-        # else:
-        #     self.categorical_features.extend(self.ordinal_features)
-        #     self.ordinal_features = []
-        
-        # # get meta data for processed data
-        # self.num_rows_, self.num_cols_ = self.processed_data.shape
-        # self.sensitive_features_ = self.sensitive_features
-        # self.numerical_features_ = self.numerical_features
-        # self.categorical_features_ = self.categorical_features
-        # self.target_feature_ = self.target_feature
-        # self.target_type_ = self.target_type
-        # self.num_classes_ = self.num_classes
-        # self.target_codes_mapping_ = self.target_codes_mapping
+        Args:
+            data: pd.DataFrame, raw data
+            missing_strategy: str, missing data handlingstrategy
+            categorical_features: list, categorical features
             
-    
-    
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
         
-
-
-
-
+        data = data.fillna(np.nan)
         
+        # Drop features with missing ratio greater than missing_drop_thres
+        for col in data.columns:
+            missing_ratio = data[col].isna().sum() / len(data)
+            if missing_ratio > missing_drop_thres:
+                data = data.drop(columns=[col])
+        
+        # Handle missing data for the remaining features
+        if missing_strategy == 'keep':
+            missing_data_info = {}
+        elif missing_strategy == 'drop':
+            data = data.dropna()
+            missing_data_info = {}
+        elif missing_strategy == 'impute':
+            data, missing_data_info = self._handle_missing_data(data, categorical_features)
+        elif missing_strategy == 'impute_cat':
+            data_cat = data[categorical_features].copy().reset_index(drop=True)
+            data_num = data.drop(columns=categorical_features).reset_index(drop=True)
+            data_cat, missing_data_info = self._handle_missing_data(data_cat, categorical_features)
+            data = pd.concat([data_num, data_cat], axis=1)
+        else:
+            raise ValueError("Invalid missing strategy")
+        
+        return data, missing_data_info
+    
+    def show_dataset_info(self):
+        """
+        Show all information of raw dataset
+        """
+        print("=========================================================")
+        print(f"Dataset name: {self.name} ({self.collection_year}) Subject Area: {self.subject_area}")
+        print(f"Dataset URL: {self.url}")
+        print(f"Dataset description: {self.description}")
+        print(f"Dataset notes: {self.notes}")
+        print(f"Dataset data type: {self.data_type}")
+        print("=========================================================")
+        self.raw_dataset.show_dataset_info()
+        print("=========================================================")
+        self.raw_dataset.show_missing_data_statistics()
+        print("=========================================================")
+    
+    ##########################################################################################################
+    # Abstract methods
+    ##########################################################################################################
+    @abstractmethod
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+        """
+        return pd.DataFrame()
+    
+    @abstractmethod
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        return {}
+    
+    @abstractmethod
+    def _set_target_feature(
+        self, 
+        data: pd.DataFrame, 
+        raw_data_config: dict, 
+        task_name: str,
+        drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        return data, {}
+    
+    @abstractmethod
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Generate ml-ready data for a specific task and specify corresponding meta data information
+        1. feature selection:
+            - drop features with are useless for the task (e.g. id, index, description, etc.)
+        2. specify numerical and categorical features
+            - numerical features: numerical + ordinal or only numerical
+            - categorical features: binary + multiclass + ordinal or binary + multiclass
+        3. optional:
+            - outlier remover
+            - gaussianization
+            - feature engineering
+        """
+        return data, {}
+    
+    @abstractmethod
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        return data, {}
+            
 
