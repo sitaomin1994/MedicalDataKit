@@ -20,7 +20,8 @@ class Dataset(ABC):
         url: str = None,
         download_link: str = None,
         notes: str = None,
-        data_type: str = None
+        data_type: str = None,
+        source: str = None
     ):
         
         # Dataset Information
@@ -32,6 +33,8 @@ class Dataset(ABC):
         self.download_link = download_link
         self.notes = notes
         self.data_type = data_type
+        self.source = source
+        
         # Raw Dataset
         self.raw_dataset: RawDataset = None                    # raw dataset
         

@@ -38,6 +38,7 @@ class ZigongHeartFailureDataset(Dataset):
         notes = 'EHR'
         data_type = 'mixed'
         self.pub_link = 'Electronic healthcare recordsand external outcome data forhospitalized patients with heartfailure'
+        source = 'physionet'
         
         super().__init__(
             name = name,
@@ -47,7 +48,8 @@ class ZigongHeartFailureDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -355,11 +357,11 @@ class ZigongHeartFailureDataset(Dataset):
 ###################################################################################################################################
 # MIMICII IACCD
 ###################################################################################################################################
-class MIMICIIDataset(Dataset):
+class MIMIC2IACDataset(Dataset):
 
     def __init__(self):
         
-        name = 'mimicii'
+        name = 'mimicii_iac'
         subject_area = 'Medical'
         year = 2008
         url = 'https://physionet.org/content/mimic2-iaccd/1.0/'
@@ -368,6 +370,7 @@ class MIMICIIDataset(Dataset):
         notes = 'MIMIC-II'
         data_type = 'mixed'
         self.pub_link = ''
+        source = 'physionet'
         
         super().__init__(
             name = name,
@@ -377,7 +380,8 @@ class MIMICIIDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -582,6 +586,7 @@ class MIComplicationsDataset(Dataset):
         notes = 'Clinical'
         data_type = 'mixed'
         self.pub_link = ''
+        source = 'vdb'
         
         super().__init__(
             name = name,
@@ -591,7 +596,8 @@ class MIComplicationsDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -888,6 +894,7 @@ class DiabeticHospitalDataset(Dataset):
         notes = 'Diabetic Hospital Dataset'
         data_type = 'mixed'
         self.pub_link = ''
+        source = 'uci'
         
         super().__init__(
             name = name,
@@ -897,7 +904,8 @@ class DiabeticHospitalDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -1164,7 +1172,8 @@ class ARI2Dataset(Dataset):
         notes = 'Clinical Sign, Etiologic Agent'
         data_type = 'mixed'
         self.pub_link = 'https://journals.lww.com/pidj/Fulltext/1999/10001/Clinical_prediction_of_serious_bacterial.5.aspx'
-        
+        source = 'vdb'    
+    
         super().__init__(
             name = name,
             description = description,
@@ -1173,7 +1182,8 @@ class ARI2Dataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -1412,6 +1422,7 @@ class RHCDataset(Dataset):
         notes = 'Clinical Sign, Etiologic Agent'
         data_type = 'mixed'
         self.pub_link = 'https://journals.lww.com/pidj/Fulltext/1999/10001/Clinical_prediction_of_serious_bacterial.5.aspx'
+        source = 'vdb'
         
         super().__init__(
             name = name,
@@ -1421,7 +1432,8 @@ class RHCDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -1620,6 +1632,7 @@ class CrashDataset(Dataset):
         notes = 'Crash'
         data_type = 'mixed'
         self.pub_link = ''
+        source = 'vdb'
         
         super().__init__(
             name = name,
@@ -1629,7 +1642,8 @@ class CrashDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -1824,6 +1838,7 @@ class SupportDataset(Dataset):
         data_type = 'numerical'
         self.pub_link = 'The support dataset is a random sample of 9000 patients from Phases I & II of SUPPORT' \
                         '(Study to Understand Prognoses Preferences Outcomes and Risks of Treatment).'
+        source = 'vdb'
         
         super().__init__(
             name = name,
@@ -1833,7 +1848,8 @@ class SupportDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -2020,6 +2036,7 @@ class CIBMTRHCTSurvivalDataset(Dataset):
                       ", such as age, sex, ethnicity, disease status, and treatment details. "
         notes = 'HSCT, Survival Prediction'
         data_type = 'mixed'
+        source = 'kaggle'
         
         super().__init__(
             name = name,
@@ -2028,7 +2045,8 @@ class CIBMTRHCTSurvivalDataset(Dataset):
             subject_area = subject_area,
             url = url,
             download_link = download_link,
-            notes = notes
+            notes = notes,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -2216,6 +2234,7 @@ class HCCSurvivalDataset(Dataset):
                       "It contains real clinical data of 165 patients diagnosed with HCC."
         notes = ''
         data_type = 'mixed'
+        source = 'uci'
         
         super().__init__(
             name = name,
@@ -2225,7 +2244,8 @@ class HCCSurvivalDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -2408,6 +2428,7 @@ class ZAlizadehsaniDataset(Dataset):
         download_link = 'https://archive.ics.uci.edu/static/public/411/extention+of+z+alizadeh+sani+dataset.zip'
         description = "Collections for CAD diagnosis."
         notes = 'Extracted from Signals, CAD'
+        source = 'uci'
         
         super().__init__(
             name = name,
@@ -2416,7 +2437,8 @@ class ZAlizadehsaniDataset(Dataset):
             subject_area = subject_area,
             url = url,
             download_link = download_link,
-            notes = notes
+            notes = notes,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
@@ -2594,6 +2616,7 @@ class NasarianCADDataset(Dataset):
         description = "First Heart Disease Dataset with Occupational Risk Factors + Clinical Features"
         notes = 'CAD'
         data_type = 'mixed'
+        source = 'uci'
         
         super().__init__(
             name = name,
@@ -2603,7 +2626,8 @@ class NasarianCADDataset(Dataset):
             url = url,
             download_link = download_link,
             notes = notes,
-            data_type = data_type
+            data_type = data_type,
+            source = source
         )
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
