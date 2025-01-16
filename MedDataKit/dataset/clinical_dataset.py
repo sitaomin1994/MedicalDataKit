@@ -972,7 +972,24 @@ class DiabeticHospitalDataset(Dataset):
         drop_features = ['encounter_id', 'patient_nbr']
         task_names = ['predict_readmission', 'predict_readmission_30']
         
-        feature_groups = {}
+        feature_groups = {
+            'demongraphic': [
+                'encounter_id', 'patient_nbr', 'race', 'gender', 'age', 'weight', 'admission_type_id', 
+                'discharge_disposition_id', 'admission_source_id', 'time_in_hospital', 'payer_code', 'readmitted'
+            ],
+            'clinical_info': [
+                'medical_specialty', 'num_lab_procedures', 'num_procedures', 'num_medications', 
+                'number_outpatient', 'number_emergency',  'number_inpatient', 'diag_1', 'diag_2', 'diag_3', 
+                'number_diagnoses'
+            ],
+            'diagnosis': [
+                'max_glu_serum', 'A1Cresult', 'metformin', 'repaglinide', 'nateglinide', 'chlorpropamide', 
+                'glimepiride', 'acetohexamide', 'glipizide', 'glyburide', 'tolbutamide', 'pioglitazone', 
+                'rosiglitazone', 'acarbose', 'miglitol', 'troglitazone', 'tolazamide', 'examide', 'citoglipton', 
+                'insulin', 'glyburide-metformin', 'glipizide-metformin', 'glimepiride-pioglitazone', 
+                'metformin-rosiglitazone', 'metformin-pioglitazone', 'change', 'diabetesMed'
+            ]
+        }
         fed_cols = []
         
         return {
@@ -1044,7 +1061,7 @@ class DiabeticHospitalDataset(Dataset):
         
         # drop features
         drop_cols = [
-            'patient_nbr', 'diag_2', 'diag_3', 
+            'patient_nbr', 'diag_2', 'diag_3', 'encounter_id',
             'glimepiride-pioglitazone', 'metformin-rosiglitazone', 'metformin-pioglitazone',
             'glipizide-metformin', 'examide', 'citoglipton', 'troglitazone', 'tolazamide',
             'miglitol', 'acarbose', 'tolbutamide', 'acetohexamide', 'chlorpropamide', 
@@ -1052,18 +1069,18 @@ class DiabeticHospitalDataset(Dataset):
         ]
         
         data = data.drop(columns=drop_cols)
+        feature_mapping = {}
         
         ################################################################################################
         # Feature Engineering
         ################################################################################################
-        
         # Admission and Discharge
         data = data[data["admission_type_id"].isin(['1', '2', '3', '5', '6'])].copy()
         data.loc[:, "discharge_disposition_id"] = (
-            data.discharge_disposition_id.apply(lambda x:x if x=='1' else 1)
+            data.discharge_disposition_id.apply(lambda x:'1' if x=='1' else '0')
         )
         data.loc[:, "admission_source_id"] = data["admission_source_id"].apply(
-            lambda x: 0 if x in ['1', '2', '3'] else (1 if x == '7' else 2)
+            lambda x: '0' if x in ['1', '2', '3'] else ('1' if x == '7' else '2')
         ).astype(str)
 
         # Medical Specialty
@@ -1092,12 +1109,17 @@ class DiabeticHospitalDataset(Dataset):
         # Payer Code
         data.loc[:, "medicare"] = data["payer_code"].apply(lambda x: 1 if x == 'MD' else 0).astype(str)
         data.loc[:, "medicaid"] = data["payer_code"].apply(lambda x: 1 if x == 'MC' else 0).astype(str)
+        feature_mapping['medicare'] = 'payer_code'
+        feature_mapping['medicaid'] = 'payer_code'
         
         # Binning
         data.loc[:, "had_emergency"] = (data["number_emergency"] > 0).astype(str)
         data.loc[:, "had_inpatient_days"] = (data["number_inpatient"] > 0).astype(str)
         data.loc[:, "had_outpatient_days"] = (data["number_outpatient"] > 0).astype(str)
         data = data.drop(columns = ['number_emergency', 'number_inpatient', 'number_outpatient'])
+        feature_mapping['had_emergency'] = 'number_emergency'
+        feature_mapping['had_inpatient_days'] = 'number_inpatient'
+        feature_mapping['had_outpatient_days'] = 'number_outpatient'
         
         data_config['binary_features'].extend(
             ['medicare', 'medicaid', 'had_emergency', 'had_inpatient_days', 'had_outpatient_days']
@@ -1113,6 +1135,7 @@ class DiabeticHospitalDataset(Dataset):
         return data, {
             'numerical_features': numerical_features,
             'categorical_features': categorical_features,
+            'feature_mapping': feature_mapping
         }
         
     
@@ -1131,18 +1154,20 @@ class DiabeticHospitalDataset(Dataset):
         missing_data_info = {}
         for col in ['A1Cresult', 'medical_specialty', 'payer_code']:
             if col in data.columns:
+                ms_ratio = data[col].isnull().sum() / len(data)
                 data[col] = data[col].fillna('Missing')
                 missing_data_info[col] = {
                     'action': 'fillna',
-                    'missing_ratio': data[col].isnull().sum() / len(data)
+                    'missing_ratio': ms_ratio / len(data)
                 }
         
         for col in ['weight', 'max_glu_serum']:
             if col in data.columns:
+                ms_ratio = data[col].isnull().sum() / len(data)
                 data = data.drop(col, axis = 1)
                 missing_data_info[col] = {
                     'action': 'drop_col',
-                    'missing_ratio': data[col].isnull().sum() / len(data)
+                    'missing_ratio': ms_ratio
                 }
                 
         for col in data.columns:

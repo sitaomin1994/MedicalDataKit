@@ -14,6 +14,7 @@ warnings.filterwarnings('ignore')
 @dataclass
 class MLTaskPreparationConfig:
     """Configuration for ML task preparation"""
+    
     missing_strategy: str = 'impute'                 # strategy for handling missing data
     missing_drop_thres: float = 0.6                  # drop features with missing ratio greater than this threshold
     ordinal_as_numerical: bool = False               # whether to treat ordinal features as numerical features
@@ -81,6 +82,8 @@ class MLTaskDataset:
         categorical_features: List[str],
         categorical_encoding: str = 'ordinal',
         numerical_encoding: str = 'standard',
+        feature_groups: Dict[str, List[str]] = {},
+        feature_mapping: Dict[str, str] = {},
         n_jobs: int = 1,
     ):
         
@@ -104,14 +107,22 @@ class MLTaskDataset:
         self.categorical_encoding = categorical_encoding
         self.numerical_encoding = numerical_encoding
         self.n_jobs = n_jobs
+        self.one_hot_cols = []
         
         # Federated
         self.fed_cols = []
-        self.feature_groups = []
+        self.feature_groups = feature_groups
+        self.feature_mapping = feature_mapping
+        
+        for col, original_col in feature_mapping.items():
+            for group_name, features in feature_groups.items():
+                if original_col in features:
+                    feature_groups[group_name].append(col)
         
         # Validate and Post-process Data
         self._validate_config()
         self._post_processing()
+        self._update_feature_groups()
         
         # Missing Data
         self.missing_ratio = None
@@ -164,11 +175,16 @@ class MLTaskDataset:
             self.numerical_encoding in ['standard', 'robust', 'quantile', 'yeo-johnson', 'none']
         ), "Invalid numerical scaling method"
         assert self.target_feature in self.data.columns, "Target feature not found in data"
-        assert (
-            len(set(self.numerical_features + self.categorical_features + [self.target_feature])) 
-            == len(self.data.columns)
-        ), "Some features are missing in the data"
         
+        cols_union = set(self.numerical_features + self.categorical_features + [self.target_feature])
+        data_cols = set(self.data.columns)
+        
+        if len(cols_union - data_cols) > 0:
+            raise ValueError(f"Some features in config are missing in the data: {cols_union - data_cols}")
+        
+        if len(data_cols - cols_union) > 0:
+            raise ValueError(f"Some features in data are missing in config: {data_cols - cols_union}")
+
         assert isinstance(self.n_jobs, int), "Invalid number of jobs"
     
     def _post_processing(self):
@@ -179,6 +195,7 @@ class MLTaskDataset:
             if col != self.target_feature:
                 if self.data[col].nunique() == 1:
                     self.data.drop(columns=[col], inplace=True)
+                    # remove columns from numerical and categorical features
                     if col in self.numerical_features:
                         self.numerical_features.remove(col)
                     elif col in self.categorical_features:
@@ -207,80 +224,88 @@ class MLTaskDataset:
         ##################################################################################################   
         # Numerical Encoding
         data_num = self.data[self.numerical_features].copy()
-        if self.numerical_encoding == 'none':
-            pass
-        else:
-            if self.numerical_encoding == 'standard':
-                numerical_pipeline = Pipeline([
-                    ('scaler', StandardScaler()),
-                    ('minmax', MinMaxScaler())
-                ])
-            elif self.numerical_encoding == 'robust':
-                numerical_pipeline = Pipeline([
-                    ('scaler', RobustScaler()),
-                    ('minmax', MinMaxScaler())
-                ])
-            elif self.numerical_encoding == 'quantile':
-                numerical_pipeline = Pipeline([
-                    ('scaler', QuantileTransformer(output_distribution='normal', random_state=42)),
-                    ('minmax', MinMaxScaler())
-                ])
-            elif self.numerical_encoding == 'yeo-johnson':
-                numerical_pipeline = Pipeline([
-                    ('scaler', PowerTransformer(method='yeo-johnson')),
-                    ('minmax', MinMaxScaler())
-                ])
+        
+        if len(data_num) > 0:
+            if self.numerical_encoding == 'none':
+                pass
             else:
-                raise ValueError(f"Invalid numerical encoding method: {self.numerical_encoding}")
+                if self.numerical_encoding == 'standard':
+                    numerical_pipeline = Pipeline([
+                        ('scaler', StandardScaler()),
+                        ('minmax', MinMaxScaler())
+                    ])
+                elif self.numerical_encoding == 'robust':
+                    numerical_pipeline = Pipeline([
+                        ('scaler', RobustScaler()),
+                        ('minmax', MinMaxScaler())
+                    ])
+                elif self.numerical_encoding == 'quantile':
+                    numerical_pipeline = Pipeline([
+                        ('scaler', QuantileTransformer(output_distribution='normal', random_state=42)),
+                        ('minmax', MinMaxScaler())
+                    ])
+                elif self.numerical_encoding == 'yeo-johnson':
+                    numerical_pipeline = Pipeline([
+                        ('scaler', PowerTransformer(method='yeo-johnson')),
+                        ('minmax', MinMaxScaler())
+                    ])
+                else:
+                    raise ValueError(f"Invalid numerical encoding method: {self.numerical_encoding}")
 
-            numerical_pipeline.set_output(transform='pandas')
-            data_num = numerical_pipeline.fit_transform(data_num)
-            self.numerical_features = data_num.columns.tolist()
+                numerical_pipeline.set_output(transform='pandas')
+                data_num = numerical_pipeline.fit_transform(data_num)
+                self.numerical_features = data_num.columns.tolist()
 
         ##################################################################################################   
         # Categorical Encoding
         data_cat = self.data[self.categorical_features].copy().astype(str)
-        # print(data_cat.isna().sum())
-        # print(data_cat.info())
+        
+        if len(data_cat) > 0:
                     
-        if self.categorical_encoding == 'onehot':
-            categorical_encoder = OneHotEncoder(
-                drop = 'first', sparse_output=False, max_categories=20, handle_unknown='error'
-            )
-        elif self.categorical_encoding == 'ordinal':
-            categorical_encoder = OrdinalEncoder()
-        elif self.categorical_encoding == 'mixed':
-            # High cardinality categorical features are encoded using OrdinalEncoder
-            # Low cardinality categorical features are encoded using OneHotEncoder
-            threshold = 50
-            n_unique_categories = data_cat.nunique().sort_values(ascending=False)
-            high_cardinality_features = n_unique_categories[n_unique_categories > threshold].index.tolist()
-            low_cardinality_features = n_unique_categories[n_unique_categories <= threshold].index.tolist()
+            if self.categorical_encoding == 'onehot':
+                categorical_encoder = OneHotEncoder(
+                    drop = 'first', sparse_output=False, max_categories=20, handle_unknown='error',
+                )
+                self.one_hot_cols = data_cat.columns.tolist()
+            
+            elif self.categorical_encoding == 'ordinal':
+                categorical_encoder = OrdinalEncoder()
+            
+            elif self.categorical_encoding == 'mixed':
+                # High cardinality categorical features are encoded using OrdinalEncoder
+                # Low cardinality categorical features are encoded using OneHotEncoder
+                threshold = 50
+                n_unique_categories = data_cat.nunique().sort_values(ascending=False)
+                high_cardinality_features = n_unique_categories[n_unique_categories > threshold].index.tolist()
+                low_cardinality_features = n_unique_categories[n_unique_categories <= threshold].index.tolist()
 
-            high_cardinality_encoder = OrdinalEncoder(
-                encoded_missing_value=np.nan, handle_unknown='error'
-            )
-            low_cardinality_encoder = OneHotEncoder(
-                drop = 'first', sparse_output=False, max_categories=20, handle_unknown='error'
-            )
+                high_cardinality_encoder = OrdinalEncoder(
+                    encoded_missing_value=np.nan, handle_unknown='error'
+                )
+                
+                low_cardinality_encoder = OneHotEncoder(
+                    drop = 'first', sparse_output=False, max_categories=20, handle_unknown='error', 
+                )
+                
+                self.one_hot_cols = low_cardinality_features
+                
+                transformers = [
+                    ('cat_high', high_cardinality_encoder, high_cardinality_features),
+                    ('cat_low', low_cardinality_encoder, low_cardinality_features)
+                ]
+                
+                categorical_encoder = ColumnTransformer(transformers=transformers, n_jobs=self.n_jobs)
+            else:
+                raise ValueError(f"Invalid categorical encoding method: {self.categorical_encoding}")
             
-            transformers = [
-                ('cat_high', high_cardinality_encoder, high_cardinality_features),
-                ('cat_low', low_cardinality_encoder, low_cardinality_features)
-            ]
+            categorical_encoder.set_output(transform='pandas')
+            data_cat = categorical_encoder.fit_transform(data_cat)
+            data_cat.columns = categorical_encoder.get_feature_names_out()
             
-            categorical_encoder = ColumnTransformer(transformers=transformers, n_jobs=self.n_jobs)
-        else:
-            raise ValueError(f"Invalid categorical encoding method: {self.categorical_encoding}")
-        
-        categorical_encoder.set_output(transform='pandas')
-        data_cat = categorical_encoder.fit_transform(data_cat)
-        data_cat.columns = categorical_encoder.get_feature_names_out()
-        
-        self.categorical_features = data_cat.columns.tolist()
-        self.categorical_feature_codes = {
-            feature: list(data_cat[feature].unique()) for feature in data_cat.columns
-        }
+            self.categorical_features = data_cat.columns.tolist()
+            self.categorical_feature_codes = {
+                feature: list(data_cat[feature].unique()) for feature in data_cat.columns
+            }
         
         ##################################################################################################   
         # Final Data
@@ -296,9 +321,83 @@ class MLTaskDataset:
         print(f"Target: {self.target_feature} Num classes: {self.num_classes}")
         print(f'Data Shape: {self.data.shape} (num {len(self.numerical_features)} cat {len(self.categorical_features)})')
         print(f'Missing ratio: {missing_ratio*100:4.1f}%')
+        print(f"Feature Groups:")
+        if len(self.feature_groups) > 0:
+            for feature_group, features in self.feature_groups.items():
+                if len(features) > 6:
+                    print(f"    - {feature_group}: {len(features)} features (e.g., {','.join(features[:3])} ... {','.join(features[-3:])})")
+                else:
+                    print(f"    - {feature_group}: {len(features)} features ({','.join(features)})")
+        else:
+            print("None")
         print("="*100)
         
+    def _update_feature_groups(self):
         
+        if len(self.feature_groups) == 0:
+            return
+        
+        updated_feature_groups = {group_name: [] for group_name in self.feature_groups.keys()}
+        
+        ##################################################################################################
+        # for each feature, find the group name
+        for col in self.data.columns:
+            
+            # for target feature, skip
+            if col == self.target_feature:
+                continue
+            
+            # categorize features
+            if col in self.categorical_features:
+                
+                # ordinal features, name is the original feature name
+                if col not in self.one_hot_cols:
+                    col_name_original = col
+                # one-hot features, name is the original feature name + '_' + category
+                else:
+                    col_name_original = col.split('_')[:-1]
+                    col_name_original = '_'.join(col_name_original)
+                
+                for group_name, features in self.feature_groups.items():
+                    if col_name_original in features:
+                        updated_feature_groups[group_name].append(col)
+            
+            # numerical features, name is the original feature name
+            elif col in self.numerical_features:
+                for group_name, features in self.feature_groups.items():
+                    if col in features:
+                        updated_feature_groups[group_name].append(col)
+            else:
+                raise ValueError(f"Invalid feature: {col}")
+        
+        ##################################################################################################
+        # deduplicate feature groups
+        for group_name, features in updated_feature_groups.items():
+            updated_feature_groups[group_name] = list(set(features))
+        
+        ##################################################################################################   
+        # Validation
+        # Check for intersections between feature group sets
+        feature_group_sets = [set(item) for item in updated_feature_groups.values()]
+        for i in range(len(feature_group_sets)):
+            for j in range(i + 1, len(feature_group_sets)):
+                intersection = feature_group_sets[i] & feature_group_sets[j]
+                if len(intersection) > 0:
+                    raise ValueError(f"Found overlapping features between feature groups: {intersection}")
+        
+        # Check union of feature groups matches data columns (excluding target)
+        data_features = set(self.data.columns.tolist()) - {self.target_feature}
+        feature_group_features = set().union(*feature_group_sets) if feature_group_sets else set()
+        
+        missing_features = data_features - feature_group_features
+        extra_features = feature_group_features - data_features
+        
+        if len(missing_features) > 0:
+            raise ValueError(f"Features in data but missing from feature groups: {missing_features}")
+        if len(extra_features) > 0:
+            raise ValueError(f"Features in feature groups but not in data: {extra_features}")
+        
+        self.feature_groups = updated_feature_groups
         
         
 

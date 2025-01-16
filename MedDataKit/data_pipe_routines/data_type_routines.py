@@ -119,5 +119,13 @@ class BasicFeatureTypeHandler(FeatureTypeHandler):
         if target_feature in categorical_features:
             categorical_features.remove(target_feature)
         
+        # remove other features from numerical and categorical features
+        numerical_features = [col for col in numerical_features if col in data.columns]
+        categorical_features = [col for col in categorical_features if col in data.columns]
+        
+        data[numerical_features] = data[numerical_features].astype(float)
+        data[categorical_features] = data[categorical_features].astype('str')
+        
         return data, numerical_features, categorical_features
+
 

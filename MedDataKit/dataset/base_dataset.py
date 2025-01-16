@@ -148,8 +148,12 @@ class Dataset(ABC):
         ), "Feature engineering configuration is not correct. " \
             "numerical_features, categorical_features, " \
             "must be specified in feature_config"
+            
+        if 'feature_mapping' not in feature_config:
+            feature_config['feature_mapping'] = {}
         
         # update feature type
+        feature_groups = raw_data_config['feature_groups']
         target_feature = target_info['target']
         numerical_features = feature_config['numerical_features']
         categorical_features = feature_config['categorical_features']
@@ -183,6 +187,8 @@ class Dataset(ABC):
             'categorical_features': categorical_features,
             'target': target_feature,
             'task_type': target_info['task_type'],
+            'feature_groups': feature_groups,
+            'feature_mapping': feature_config['feature_mapping']
         }
         
         self.ml_task_dataset = MLTaskDataset(
