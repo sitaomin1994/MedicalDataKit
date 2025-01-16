@@ -4,6 +4,7 @@ import pyreadr
 import numpy as np
 from typing import Tuple, Optional, List, Dict, Any, Union
 from config import DATA_DIR, DATA_DOWNLOAD_DIR
+from scipy.io import arff
 
 from ..downloader import OpenMLDownloader
 from ..downloader import RDataDownloader
@@ -117,8 +118,10 @@ class ArrhythmiaDataset(Dataset):
         target_features = ['Class']
         sensitive_features = ['Age', 'Sex']
         drop_features = []
-        feature_groups = {}
         task_names = ['Class']
+        
+        feature_groups = {}
+        fed_cols = []
         
         return {
             'numerical_features': numerical_features,
@@ -130,7 +133,8 @@ class ArrhythmiaDataset(Dataset):
             'sensitive_features': sensitive_features,
             'drop_features': drop_features,
             'feature_groups': feature_groups,
-            'task_names': task_names
+            'task_names': task_names,
+            'fed_cols': fed_cols
         }
 
     def _set_target_feature(
@@ -287,10 +291,12 @@ class ColposcopyDataset(Dataset):
         ]
         sensitive_features = []
         drop_features = []
-        feature_groups = {}
         task_names = ['type_prediction', 'consensus_prediction']
         for i in range(6):
             task_names.append(f'expert_{i}_prediction')
+        
+        feature_groups = {}
+        fed_cols = []
         
         return {
             'numerical_features': numerical_features,
@@ -302,7 +308,8 @@ class ColposcopyDataset(Dataset):
             'drop_features': drop_features,
             'feature_groups': feature_groups,
             'task_names': task_names,
-            'ordinal_feature_order_dict': ordinal_feature_order_dict
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
         }
     
     def _set_target_feature(
@@ -350,188 +357,6 @@ class ColposcopyDataset(Dataset):
     ) -> Tuple[pd.DataFrame, dict]:
         """
         
-        """
-        ordinal_as_numerical = ml_task_prep_config.ordinal_as_numerical
-        feature_type_handler = BasicFeatureTypeHandler(ordinal_as_numerical)
-        
-        data, numerical_features, categorical_features = feature_type_handler.handle_feature_type(
-            data, data_config
-        )
-        
-        return data, {
-            'numerical_features': numerical_features,
-            'categorical_features': categorical_features,
-        }
-    
-    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
-        """
-        Handle missing data
-        
-        Args:
-            data: pd.DataFrame, raw data
-            categorical_features: list, categorical features
-            
-        Returns:
-            data: pd.DataFrame, processed data
-            missing_data_info: dict, missing data processing information
-        """
-        return data.dropna(), {}
-
-###################################################################################################################################
-# Dermatology Dataset
-###################################################################################################################################
-class ZAlizadehsaniDataset(Dataset):
-
-    def __init__(self):
-        
-        name = 'zalizadehsani'
-        subject_area = 'Medical'
-        year = 2017
-        url = 'https://archive.ics.uci.edu/dataset/411/extention+of+z+alizadeh+sani+dataset'
-        download_link = 'https://archive.ics.uci.edu/static/public/411/extention+of+z+alizadeh+sani+dataset.zip'
-        description = "Collections for CAD diagnosis."
-        notes = 'Extracted from Signals, CAD'
-        
-        super().__init__(
-            name = name,
-            description = description,
-            collection_year = year,
-            subject_area = subject_area,
-            url = url,
-            download_link = download_link,
-            notes = notes
-        )
-        
-        self.data_dir = os.path.join(DATA_DIR, self.name)
-        self.raw_dataset: RawDataset = None
-        self.ml_ready_dataset: MLReadyDataset = None
-    
-    def _load_raw_data(self) -> pd.DataFrame:
-        """
-        Load raw dataset and specify meta data information
-        
-        Returns:
-            raw_data: pd.DataFrame, raw data
-            meta_data: dict, meta data
-        """
-        # download data
-        downloader = UCIMLDownloader(url = self.download_link)
-        download_status = downloader._custom_download(data_dir = self.data_dir)
-        if not download_status:
-            raise Exception(f'Failed to download data for {self.name}')
-        
-        # load raw data
-        raw_data = pd.read_excel(
-            os.path.join(self.data_dir, 'extention of Z-Alizadeh sani dataset.xlsx')
-        )
-        
-        return raw_data
-    
-    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
-        """
-        Set raw data configuration
-        
-        Returns:
-            raw_data_config: dict, raw data configuration
-        """
-        numerical_features = [
-            'Age', 'Weight', 'Length', 'BMI', 'BP', 'PR', 'FBS', 'CR',
-            'TG', 'LDL', 'HDL', 'BUN', 'ESR', 'HB', 'K', 'Na', 'WBC', 'Lymph',
-            'Neut', 'PLT', 'EF-TTE',
-        ]
-        
-        ordinal_features = []
-        ordinal_feature_order_dict = {}
-        
-        multiclass_features = [
-            'BBB', 'VHD', 'Region RWMA'
-        ]
-        
-        target_features = [
-            'LAD', 'LCX', 'RCA', 'Cath'
-        ]
-        
-        binary_features = [
-            col for col in raw_data.columns 
-            if col not in numerical_features + ordinal_features + multiclass_features
-        ]
-        
-        sensitive_features = ['Age', 'Sex']
-        drop_features = []
-        feature_groups = {}
-        task_names = ['LAD', 'LCX', 'RCA', 'Cath']
-        
-        return {
-            'numerical_features': numerical_features,
-            'binary_features': binary_features,
-            'multiclass_features': multiclass_features,
-            'ordinal_features': ordinal_features,
-            'target_features': target_features,
-            'sensitive_features': sensitive_features,
-            'drop_features': drop_features,
-            'feature_groups': feature_groups,
-            'task_names': task_names,
-            'ordinal_feature_order_dict': ordinal_feature_order_dict
-        }
-    
-    def _set_target_feature(
-        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
-    ) -> Tuple[pd.DataFrame, dict]:
-        """
-        Set target feature based on task name
-        
-        Args:
-            data: pd.DataFrame, raw data
-            raw_data_config: dict, raw data configuration {'target', 'task_type'}
-            task_name: str, task name
-            drop_unused_targets: bool, whether to drop unused target features
-        Returns:
-            data: pd.DataFrame, processed data
-            target_info: dict, target information
-        """
-        if drop_unused_targets is False:
-            raise ValueError(f"drop_unused_targets is False for {self.name} dataset, which is not supported")
-
-        target_features = raw_data_config['target_features']
-        if task_name == 'Cath':
-            target_info = {
-                'target': 'Cath',
-                'task_type': 'classification'
-            }
-        elif task_name == 'LAD':
-            target_info = {
-                'target': 'LAD',
-                'task_type': 'classification'
-            }
-        elif task_name == 'LCX':
-            target_info = {
-                'target': 'LCX',
-                'task_type': 'classification'
-            }
-        elif task_name == 'RCA':
-            target_info = {
-                'target': 'RCA',
-                'task_type': 'classification'
-            }
-        
-        data = handle_targets(data, raw_data_config, drop_unused_targets, target_info['target'])
-        
-        return data, target_info
-    
-    def _feature_engineering(
-        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
-    ) -> Tuple[pd.DataFrame, dict]:
-        """
-        Set target feature based on task name
-        
-        Args:
-            data: pd.DataFrame, raw data
-            raw_data_config: dict, raw data configuration {'target', 'task_type'}
-            task_name: str, task name
-            
-        Returns:
-            data: pd.DataFrame, processed data
-            target_info: dict, target information
         """
         ordinal_as_numerical = ml_task_prep_config.ordinal_as_numerical
         feature_type_handler = BasicFeatureTypeHandler(ordinal_as_numerical)
@@ -637,8 +462,10 @@ class SPECTFDataset(Dataset):
         target_features = ['Diagnosis']
         sensitive_features = []
         drop_features = []
-        feature_groups = {}
         task_names = ['Diagnosis']
+        
+        feature_groups = {}
+        fed_cols = []
         
         return {
             'numerical_features': numerical_features,
@@ -650,7 +477,8 @@ class SPECTFDataset(Dataset):
             'drop_features': drop_features,
             'feature_groups': feature_groups,
             'task_names': task_names,
-            'ordinal_feature_order_dict': ordinal_feature_order_dict
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
         }
     
     def _set_target_feature(
@@ -712,7 +540,156 @@ class SPECTFDataset(Dataset):
             missing_data_info: dict, missing data processing information
         """
         return data.dropna(), {}
+    
+###################################################################################################################################
+# Breast Cancer Wisconsin Dataset
+###################################################################################################################################
+class BreastCancerWisconsinDataset(Dataset):
 
+    def __init__(self):
+        
+        name = 'breast_wisc'
+        subject_area = 'Medical'
+        year = 1995
+        url = 'https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic'
+        download_link = 'https://archive.ics.uci.edu/static/public/17/breast+cancer+wisconsin+diagnostic.zip'
+        description = "Diagnostic Wisconsin Breast Cancer Database."
+        notes = 'Extracted from Signals'
+        data_type = 'numerical'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+    
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
+        # download data
+        downloader = UCIMLDownloader(url = self.download_link)
+        download_status = downloader._custom_download(data_dir = self.data_dir)
+        if not download_status:
+            raise Exception(f'Failed to download data for {self.name}')
+        
+        # load raw data
+        raw_data = pd.read_csv(os.path.join(self.data_dir, 'wdbc.data'), header = None, index_col = 0)
+        raw_data.columns = ['diagnosis'] + [f'F{i-1}' for i in raw_data.columns[1:]]
+        
+        return raw_data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        binary_features = ['diagnosis']
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        multiclass_features = []
+        numerical_features = [
+            col for col in raw_data.columns 
+            if col not in binary_features + ordinal_features + multiclass_features
+        ]
+        
+        target_features = ['diagnosis']
+        sensitive_features = []
+        drop_features = []
+        task_names = ['diagnosis']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+
+        if task_name != 'diagnosis':
+            raise ValueError(f"task_name is not 'diagnosis' for {self.name} dataset, which is not supported")
+        
+        target_info = {
+            'target': 'diagnosis',
+            'task_type': 'classification'
+        }
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        return data, {
+            'numerical_features': data_config['numerical_features'],
+            'categorical_features': [],
+        }
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        return data.dropna(), {}
+    
 
 ###################################################################################################################################
 # Dermatology Dataset
@@ -720,42 +697,835 @@ class SPECTFDataset(Dataset):
 class DermatologyDataset(Dataset):
 
     def __init__(self):
-        super().__init__()
-        self.name = 'dermatology'
+        
+        name = 'dermatology'
+        subject_area = 'Medical'
+        year = 1997
+        url = 'https://archive.ics.uci.edu/dataset/33/dermatology'
+        download_link = 'https://archive.ics.uci.edu/static/public/33/dermatology.zip'
+        description = "Aim for this dataset is to determine the type of Eryhemato-Squamous Disease."
+        notes = ''
+        data_type = 'mixed'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type
+        )
+        
         self.data_dir = os.path.join(DATA_DIR, self.name)
-
-    def load(self):
-        
-        # download data
-        raw_data = self.download_data()
-
-        # specify meta data
-        self.sensitive_features = ['Age']
-        self.drop_features = []
-        self.numerical_features = ['Age']
-        self.ordinal_features = [col for col in raw_data.columns[:-1] if col not in self.numerical_features + self.drop_features]
-        self.binary_features = []
-        self.multiclass_features = [raw_data.columns[-1]]
-        self.target_features = [raw_data.columns[-1]]
-        
-        # basic processing
-        self.raw_data = self.basic_processing(raw_data)
-
-    def handle_missing_data(self, data: pd.DataFrame):
-        return data.dropna()
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
     
-    def download_data(self):
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
         # download data
-        downloader = OpenMLDownloader(data_id=35)
-        print(self.data_dir)
+        downloader = UCIMLDownloader(url = self.download_link)
         download_status = downloader._custom_download(data_dir = self.data_dir)
         if not download_status:
             raise Exception(f'Failed to download data for {self.name}')
         
-        # load data
-        raw_data = pd.read_csv(os.path.join(self.data_dir, DATA_DOWNLOAD_DIR, 'data.csv')) # todo: data.csv as parameters
+        # load raw data
+        raw_data = pd.read_csv(os.path.join(self.data_dir, 'dermatology.data'), header=None, na_values='?')
+        column_names = [
+            'erythema', 'scaling', 'definite_borders', 'itching', 'koebner_phenomenon', 'polygonal_papules', 
+            'follicular_papules', 'oral_mucosal_involvement', 'knee_and_elbow_involvement', 'scalp_involvement',
+            'family_history', 'melanin_incontinence', 'eosinophils_in_the_infiltrate', 'PNL_infiltrate',
+            'fibrosis_of_the_papillary_dermis', 'exocytosis', 'acanthosis', 'hyperkeratosis', 'parakeratosis',
+            'clubbing_of_the_rete_ridges', 'elongation_of_the_rete_ridges', 'thinning_of_the_suprapapillary_epidermis',
+            'spongiform_pustule', 'munro_microabcess', 'focal_hypergranulosis', 'disappearance_of_the_granular_layer',
+            'vacuolisation_and_damage_of_basal_layer', 'spongiosis', 'saw_tooth_appearance_of_retes', 'follicular_horn_plug',
+            'perifollicular_parakeratosis', 'inflammatory_monoluclear_inflitrate', 'band_like_infiltrate', 'Age', 'Class'
+        ]
+        raw_data.columns = column_names
+        
         return raw_data
-
-
-
     
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        binary_features = ['family_history']
+        numerical_features = ['Age']
+        ordinal_feature_order_dict = {}
+        multiclass_features = ['Class']
+        ordinal_features = [
+            col for col in raw_data.columns 
+            if col not in binary_features + numerical_features + multiclass_features
+        ]
+        for col in ordinal_features:
+            ordinal_feature_order_dict[col] = [0, 1, 2, 3]
+        
+        target_features = ['Class']
+        sensitive_features = []
+        drop_features = []
+        task_names = ['Class']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+
+        if task_name != 'Class':
+            raise ValueError(f"task_name is not 'Class' for {self.name} dataset, which is not supported")
+        
+        target_info = {
+            'target': 'Class',
+            'task_type': 'classification'
+        }
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        ordinal_as_numerical = ml_task_prep_config.ordinal_as_numerical
+        feature_type_handler = BasicFeatureTypeHandler(ordinal_as_numerical)
+        
+        data, numerical_features, categorical_features = feature_type_handler.handle_feature_type(
+            data, data_config
+        )
+        
+        return data, {
+            'numerical_features': numerical_features,
+            'categorical_features': categorical_features,
+        }
+        
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        return data.dropna(), {}
+    
+###################################################################################################################################
+# Bone Transplant Dataset
+###################################################################################################################################
+class BoneTransplantDataset(Dataset):
+
+    def __init__(self):
+        
+        name = 'bonetransplant'
+        subject_area = 'Medical'
+        year = 2020
+        url = 'https://archive.ics.uci.edu/dataset/565/bone+marrow+transplant+children?spm=wolai.workspace.0.0.5fd9761cERlBBA'
+        download_link = 'https://archive.ics.uci.edu/static/public/565/bone+marrow+transplant+children.zip'
+        description = "The data set describes pediatric patients with several hematologic diseases, " \
+            "who were subject to the unmanipulated allogeneic unrelated donor hematopoietic stem cell transplantation."
+        notes = ''
+        data_type = 'mixed'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+    
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
+        # download data
+        downloader = UCIMLDownloader(url = self.download_link)
+        download_status = downloader._custom_download(data_dir = self.data_dir)
+        if not download_status:
+            raise Exception(f'Failed to download data for {self.name}')
+        
+        # load raw data
+        data, meta = arff.loadarff(os.path.join(self.data_dir, 'bone-marrow.arff'))
+        df = pd.DataFrame(data)
+        for col in df.columns:
+            df[col] = df[col].replace(b'?', pd.NA)
+            try:
+                # Decode bytes and convert to numeric, keeping NaN values
+                df[col] = pd.to_numeric(df[col].str.decode('utf-8'), errors='coerce')
+            except (ValueError, AttributeError):
+                continue
+        df.replace('?', np.nan, inplace=True)
+        df = df[df['ANCrecovery'] < 1000000]
+        df = df.drop(columns = ['Disease'])
+        raw_data = df
+        
+        return raw_data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        numerical_features = [
+            'Donorage', 'Recipientage', 'CD34kgx10d6', 'CD3dCD34', 'CD3dkgx10d8', 'ANCrecovery', 
+            'PLTrecovery', 'Rbodymass', 'time_to_aGvHD_III_IV', 'survival_time'
+        ]
+        multiclass_features = ['DonorABO', 'RecipientABO', 'CMVstatus', 'HLAmatch', 'Antigen', 'Alel', 'HLAgrI']
+        binary_features = [
+            col for col in raw_data.columns 
+            if col not in numerical_features + multiclass_features + ordinal_features
+        ]
+        
+        target_features = ['survival_status']
+        sensitive_features = ['Recipientgender']
+        drop_features = []
+        task_names = ['predict_survival', 'predict_survival_status']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+
+        if task_name == 'predict_survival':
+            data['survival_encoded'] = data.apply(
+                lambda row: f"{row['survival_status']}|{row['survival_time']}", axis = 1
+            )
+            data = data.drop(columns = ['survival_status', 'survival_time'])
+            target_info = {
+                'target': 'survival_encoded',
+                'task_type': 'survival'
+            }
+        elif task_name == 'predict_survival_status':
+            target_info = {
+                'target': 'survival_status',
+                'task_type': 'classification'
+            }
+        
+        assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        ordinal_as_numerical = ml_task_prep_config.ordinal_as_numerical
+        feature_type_handler = BasicFeatureTypeHandler(ordinal_as_numerical)
+        
+        data, numerical_features, categorical_features = feature_type_handler.handle_feature_type(
+            data, data_config
+        )
+        
+        return data, {
+            'numerical_features': numerical_features,
+            'categorical_features': categorical_features,
+        }
+        
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        missing_data_handler = BasicMissingDataHandler(
+            threshold1_num=0.5,
+            threshold1_cat=0.5,
+            threshold2_num=0.05,
+            threshold2_cat=0.05
+        )
+        data, missing_data_info = missing_data_handler.handle_missing_data(data, categorical_features)
+        return data, missing_data_info
+    
+###################################################################################################################################
+# Parkinsons Dataset
+###################################################################################################################################
+class ParkinsonsDataset(Dataset):
+
+    def __init__(self):
+        
+        name = 'parkinsons'
+        subject_area = 'Medical'
+        year = 2020
+        url = 'https://archive.ics.uci.edu/dataset/174/parkinsons'
+        download_link = 'https://archive.ics.uci.edu/static/public/174/parkinsons.zip'
+        description = "Oxford Parkinson's Disease Detection Dataset"
+        notes = 'Extracted from Signal'
+        data_type = 'numerical'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+    
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
+        # download data
+        downloader = UCIMLDownloader(url = self.download_link)
+        download_status = downloader._custom_download(data_dir = self.data_dir)
+        if not download_status:
+            raise Exception(f'Failed to download data for {self.name}')
+        
+        # load raw data        
+        raw_data = pd.read_csv(
+            os.path.join(self.data_dir, 'parkinsons.data'), index_col = 0
+        )
+        raw_data.columns = [str(i) for i in raw_data.columns]
+
+        return raw_data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        multiclass_features = []
+        binary_features = ['status']
+        numerical_features = [
+            col for col in raw_data.columns 
+            if col not in binary_features + multiclass_features + ordinal_features
+        ]
+        
+        target_features = ['status']
+        sensitive_features = []
+        drop_features = []
+        task_names = ['predict_status']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+
+        if task_name == 'predict_status':
+            target_info = {
+                'target': 'status',
+                'task_type': 'classification'
+            }
+        
+        assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        return data, {
+            'numerical_features': data_config['numerical_features'],
+            'categorical_features': [],
+        }
+        
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        return data.dropna(), {}
+    
+
+###################################################################################################
+# Cervical Risk Dataset
+###################################################################################################
+class CervicalRiskDataset(Dataset):
+
+    def __init__(self):
+        
+        name = 'cervical_risk'
+        subject_area = 'Medical'
+        year = 2023
+        url = 'https://archive.ics.uci.edu/dataset/383/cervical+cancer+risk+factors?'
+        download_link = 'https://archive.ics.uci.edu/static/public/383/cervical+cancer+risk+factors.zip'
+        description = "This dataset focuses on the prediction of indicators/diagnosis of cervical cancer. " \
+                      "The features cover demographic information, habits, and historic medical records."
+        notes = ''
+        data_type = 'mixed'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+    
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
+        # download data
+        downloader = UCIMLDownloader(url = self.download_link)
+        download_status = downloader._custom_download(data_dir = self.data_dir)
+        if not download_status:
+            raise Exception(f'Failed to download data for {self.name}')
+        
+        # load raw data        
+        raw_data = pd.read_csv(os.path.join(self.data_dir, 'risk_factors_cervical_cancer.csv'), na_values='?')
+        
+        return raw_data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        multiclass_features = []
+        binary_features = ['status']
+        numerical_features = [
+            'Age', 'Number of sexual partners', 'First sexual intercourse', 'Num of pregnancies', 'Smokes (years)',
+            'Smokes (packs/year)', 'Hormonal Contraceptives (years)', 'IUD (years)', 'STDs (number)',
+            'STDs: Number of diagnosis', 'STDs: Time since first diagnosis', 'STDs: Time since last diagnosis',
+        ]
+        
+        binary_features = [
+            col for col in raw_data.columns 
+            if col not in numerical_features + multiclass_features + ordinal_features
+        ]
+        
+        target_features = ['Biopsy']
+        sensitive_features = ['Age']
+        drop_features = []
+        task_names = ['predict_biopsy']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+
+        if task_name == 'predict_biopsy':
+            target_info = {
+                'target': 'Biopsy',
+                'task_type': 'classification'
+            }
+        else:
+            raise ValueError(f"task name {task_name} is not supported")
+        
+        assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        ordinal_as_numerical = ml_task_prep_config.ordinal_as_numerical
+        feature_type_handler = BasicFeatureTypeHandler(ordinal_as_numerical)
+        
+        data, numerical_features, categorical_features = feature_type_handler.handle_feature_type(
+            data, data_config
+        )
+        
+        return data, {
+            'numerical_features': numerical_features,
+            'categorical_features': categorical_features,
+        }
+        
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        missing_data_handler = BasicMissingDataHandler(
+            threshold1_num = 0.5,
+            threshold2_num = 0.05,
+            threshold1_cat = 0.5,
+            threshold2_cat = 0.05,
+            impute_num = 'mean',
+            impute_cat = 'other'
+        )
+        data, missing_data_info = missing_data_handler.handle_missing_data(data, categorical_features)
+        
+        return data, missing_data_info
+
+###################################################################################################
+# Codon Dataset
+###################################################################################################
+class CodonUsageDataset(Dataset):
+
+    def __init__(self):
+        
+        name = 'codon'
+        subject_area = 'Medical'
+        year = 2020
+        url = 'https://archive.ics.uci.edu/dataset/577/codon+usage'
+        download_link = 'https://archive.ics.uci.edu/static/public/577/codon+usage.zip'
+        description = "DNA codon usage frequencies of a large sample of diverse biological organisms from different taxa"
+        notes = 'Bioinformatics'
+        data_type = 'numerical'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+    
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
+        # download data
+        downloader = UCIMLDownloader(url = self.download_link)
+        download_status = downloader._custom_download(data_dir = self.data_dir)
+        if not download_status:
+            raise Exception(f'Failed to download data for {self.name}')
+        
+        # load raw data        
+        raw_data = pd.read_csv(os.path.join(self.data_dir, 'codon_usage.csv'), sep=',', low_memory=False)
+        raw_data = raw_data.drop(['SpeciesID', 'Ncodons', 'SpeciesName', 'DNAtype'], axis=1)
+        
+        raw_data.replace("non-B hepatitis virus", np.nan, inplace=True)
+        raw_data.replace("12;I", np.nan, inplace=True)
+        raw_data.replace('-', np.nan, inplace=True)
+
+        return raw_data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        multiclass_features = ['Kingdom']
+        binary_features = []
+        numerical_features = [
+            col for col in raw_data.columns 
+            if col not in binary_features + multiclass_features + ordinal_features
+        ]
+        
+        target_features = ['Kingdom']
+        sensitive_features = []
+        drop_features = []
+        task_names = ['predict_kingdom']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+
+        if task_name == 'predict_kingdom':
+            target_info = {
+                'target': 'Kingdom',
+                'task_type': 'classification'
+            }
+        
+        assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        return data, {
+            'numerical_features': data_config['numerical_features'],
+            'categorical_features': [],
+        }
+        
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        return data.dropna(), {}

@@ -18,9 +18,11 @@ class RawDataset:
         target_features: list,
         sensitive_features: list,
         drop_features: list,
-        feature_groups: dict,
         # ML Tasks
-        task_names: list
+        task_names: list,
+        # Federated Information
+        fed_cols: list = None,
+        feature_groups: dict = None,
     ):
         
         # Feature types
@@ -34,7 +36,17 @@ class RawDataset:
         self.drop_features = drop_features
         self.sensitive_features = sensitive_features
         self.target_features = target_features
-        self.feature_groups = feature_groups
+        
+        # Federated Information
+        if fed_cols is not None:
+            self.fed_cols = fed_cols
+        else:
+            self.fed_cols = []
+        
+        if feature_groups is not None:
+            self.feature_groups = feature_groups
+        else:
+            self.feature_groups = {}
         
         # ML Tasks
         self.task_names = task_names
@@ -82,7 +94,8 @@ class RawDataset:
             'drop_features': self.drop_features,
             'sensitive_features': self.sensitive_features,
             'feature_groups': self.feature_groups,
-            'task_names': self.task_names
+            'task_names': self.task_names,
+            'fed_cols': self.fed_cols
         }
     
     @property
@@ -172,6 +185,37 @@ class RawDataset:
             len(self.target_features) > 0
         ), "No target features specified"
         
+        ###########################################################################################################
+        # Check correctness of feature groups and fed_cols
+        ###########################################################################################################
+        feature_groups = self.feature_groups
+        fed_cols = self.fed_cols
+        target_features = self.target_features
+        
+        # Check if fed_cols are in the data
+        if len(fed_cols) > 0:
+            assert all(item in data.columns for item in fed_cols), "Some specified fed_cols are not in the data"
+        
+        if len(feature_groups) > 0:
+            # Check for intersections between feature group sets
+            feature_group_sets = [set(item) for item in feature_groups.values()]
+            for i in range(len(feature_group_sets)):
+                for j in range(i + 1, len(feature_group_sets)):
+                    intersection = feature_group_sets[i] & feature_group_sets[j]
+                    if len(intersection) > 0:
+                        raise ValueError(f"Found overlapping features between feature groups: {intersection}")
+            
+            # Check union of feature groups matches raw data columns
+            raw_features = set(data.columns.tolist())
+            feature_group_features = set().union(*feature_group_sets)
+            missing_features = raw_features - feature_group_features
+            extra_features = feature_group_features - raw_features
+            
+            if len(missing_features) > 0:
+                raise ValueError(f"Features in raw data but missing from feature groups: {missing_features}")
+            if len(extra_features) > 0:
+                raise ValueError(f"Features in feature groups but not in raw data: {extra_features}")
+        
     def _basic_processing(self, data: pd.DataFrame):
         """
         Conduct basic processing for raw data based on the meta data
@@ -183,7 +227,7 @@ class RawDataset:
         for feature in self.ordinal_features:
             if feature in self.ordinal_feature_order_dict:
                 order = self.ordinal_feature_order_dict[feature]
-                data[feature] = data[feature].astype(pd.CategoricalDtype(order))
+                data[feature] = data[feature].astype(pd.CategoricalDtype(order, ordered=True))
             else:
                 data[feature] = data[feature].astype(str)
         
@@ -207,6 +251,19 @@ class RawDataset:
         self.data = data
         
         return data
+    
+    @staticmethod
+    def factorize_ordinal_features(data: pd.DataFrame, ordinal_features: list = None):
+        
+        data_copy = data.copy()
+        ordinal_feature_codes = {}
+
+        for feature in ordinal_features:
+            data_copy[feature], codes = pd.factorize(data_copy[feature], sort=True)
+            data_copy[feature] = data_copy[feature].replace(-1, np.nan)
+            ordinal_feature_codes[feature] = dict(enumerate(codes))
+        
+        return data_copy, ordinal_feature_codes
     
     def calculate_feature_stats(self, data: pd.DataFrame):
         """
@@ -348,6 +405,7 @@ class RawDataset:
                         
                         categories = self.feature_stats[feature]['unique_values']
                         na_ratio = self.feature_stats[feature]['na_ratio']
+                        data_type = self.data[feature].dtype.name
                         
                         if len(feature) > 10:
                             feature = feature[:7] + '...'
@@ -355,9 +413,9 @@ class RawDataset:
                             feature = feature
                         
                         if len(categories) > 20:
-                            print(f"    - {feature:10s} ({feature_type}): NA: {na_ratio*100:4.1f}% - {len(categories):4d} categories")
+                            print(f"    - {feature:10s} ({feature_type}, {data_type:5s}): NA: {na_ratio*100:4.1f}% - {len(categories):4d} categories")
                         else:
-                            print(f"    - {feature:10s} ({feature_type}): NA: {na_ratio*100:4.1f}% - {categories}")
+                            print(f"    - {feature:10s} ({feature_type}, {data_type:5s}): NA: {na_ratio*100:4.1f}% - {categories}")
             
             # Feature Groups
             print(f"Feature Groups:")

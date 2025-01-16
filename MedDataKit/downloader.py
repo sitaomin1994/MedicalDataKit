@@ -287,13 +287,56 @@ class OpenMLDownloader(DownLoader):
             print(e)
             return False
         
+class URLDownloader(DownLoader):
+
+    def __init__(self, url: str, zipfile: bool = False):
+        self.url = url
+        self.zipfile = zipfile
+        super().__init__()
+
+    def _custom_download(self, data_dir: str):
+
+        try:
+            download_dir = os.path.join(data_dir)
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+
+            url = self.url
+            file_name = url.split('/')[-1]
+            file_path = os.path.join(download_dir, file_name)
+            # check if the file exists, if not, download and save file
+            if not os.path.exists(file_path):
+                # download data and unzip to download_dir
+                response = requests.get(url)
+                
+                # save response content to file_path
+                with open(file_path, 'wb') as f:
+                    f.write(response.content)
+
+            # unzip the zip file
+            if self.zipfile:
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                    zip_ref.extractall(download_dir)
+                
+            # return True if the download is successful
+            return True
+        except Exception as e:
+            print(e)
+            return False
+        
         
 class LocalDownloader(DownLoader):
 
-    def __init__(self, local_data_dir: str, file_names: list[str]):
-        self.local_data_dir = local_data_dir
+    def __init__(self, file_names: list[str]):
         self.file_names = file_names
         super().__init__()
 
     def _custom_download(self, data_dir: str):
-        pass
+        
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+        
+        if not all(os.path.exists(os.path.join(data_dir, file_name)) for file_name in self.file_names):
+            raise Exception(f'File {file_name} does not exist in {data_dir}')
+        
+        return True

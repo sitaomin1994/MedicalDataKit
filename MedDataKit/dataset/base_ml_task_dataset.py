@@ -105,6 +105,10 @@ class MLTaskDataset:
         self.numerical_encoding = numerical_encoding
         self.n_jobs = n_jobs
         
+        # Federated
+        self.fed_cols = []
+        self.feature_groups = []
+        
         # Validate and Post-process Data
         self._validate_config()
         self._post_processing()
@@ -235,7 +239,9 @@ class MLTaskDataset:
 
         ##################################################################################################   
         # Categorical Encoding
-        data_cat = self.data[self.categorical_features].copy()
+        data_cat = self.data[self.categorical_features].copy().astype(str)
+        # print(data_cat.isna().sum())
+        # print(data_cat.info())
                     
         if self.categorical_encoding == 'onehot':
             categorical_encoder = OneHotEncoder(

@@ -63,10 +63,14 @@ class Dataset(ABC):
             'target_features' in meta_data and 
             'sensitive_features' in meta_data and 
             'drop_features' in meta_data and 
-            'feature_groups' in meta_data and 
             'task_names' in meta_data
         ), "Meta data structure is not correct. target_features, sensitive_features, drop_features,"\
         "feature_groups, and task_names must be specified in meta data"
+        
+        assert (
+            'feature_groups' in meta_data and 
+            'fed_cols' in meta_data
+        ), "Meta data structure is not correct. feature_groups and fed_cols must be specified in meta data"
         
         # Create raw dataset based on raw dataframe and meta data
         self.raw_dataset = RawDataset(raw_data, **meta_data)
@@ -102,6 +106,9 @@ class Dataset(ABC):
         ##########################################################################################################
         # Get copy of raw data
         raw_data = self.raw_dataset.get_data().copy()
+        raw_data, ordinal_feature_codes = self.raw_dataset.factorize_ordinal_features(
+            raw_data, self.raw_dataset.ordinal_features
+        )
         raw_data_config = self.raw_dataset.raw_data_config
         
         if verbose:
@@ -111,6 +118,7 @@ class Dataset(ABC):
         # Set target variable based on task name
         if task_name is None:
             task_name = raw_data_config['task_names'][0]
+        
         drop_unused_targets = self.ml_task_prep_config.drop_unused_targets
         raw_data, target_info = self._set_target_feature(
             raw_data, raw_data_config, task_name, drop_unused_targets

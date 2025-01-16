@@ -1618,6 +1618,28 @@ files = [
 cffi = {version = "*", markers = "implementation_name == \"pypy\""}
 
 [[package]]
+name = "rdata"
+version = "0.11.2"
+description = "Read R datasets from Python."
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "rdata-0.11.2-py3-none-any.whl", hash = "sha256:d819241bcec2aaaf5d267256cbdbcbe4fcbfae66b605e7a34980049f80521450"},
+    {file = "rdata-0.11.2.tar.gz", hash = "sha256:86f50312f97569c656f01d6dc343b920ded0ccf884a31decfb670cbef80bab39"},
+]
+
+[package.dependencies]
+numpy = "*"
+pandas = "*"
+typing-extensions = ">4.4"
+xarray = "*"
+
+[package.extras]
+docs = ["igraph", "ipywidgets", "jupyterlite-pyodide-kernel", "jupyterlite-sphinx", "matplotlib", "myst-parser", "pydata-sphinx-theme", "sphinx (>=3.1)", "sphinx-codeautolink", "sphinx-gallery"]
+test = ["numpy (>=1.14)", "pytest", "pytest-cov"]
+typing = ["matplotlib (>=3.8)", "mypy", "pandas-stubs"]
+
+[[package]]
 name = "requests"
 version = "2.32.3"
 description = "Python HTTP for Humans."
@@ -1901,7 +1923,32 @@ files = [
     {file = "webencodings-0.5.1.tar.gz", hash = "sha256:b36a1c245f2d304965eb4e0a82848379241dc04b865afcc4aab16748587e1923"},
 ]
 
+[[package]]
+name = "xarray"
+version = "2025.1.1"
+description = "N-D labeled arrays and datasets in Python"
+optional = false
+python-versions = ">=3.10"
+files = [
+    {file = "xarray-2025.1.1-py3-none-any.whl", hash = "sha256:8a69d17c1e4ad09664fd0bc2dbb398e7368eda25bd19456fb919a6eb6490fb72"},
+    {file = "xarray-2025.1.1.tar.gz", hash = "sha256:1a3011d00ca92a94ba31b297c2eccd310b87a7dacf5acc8d0468385d4a834342"},
+]
+
+[package.dependencies]
+numpy = ">=1.24"
+packaging = ">=23.2"
+pandas = ">=2.1"
+
+[package.extras]
+accel = ["bottleneck", "flox", "numba (>=0.54)", "numbagg", "opt_einsum", "scipy"]
+complete = ["xarray[accel,etc,io,parallel,viz]"]
+dev = ["hypothesis", "jinja2", "mypy", "pre-commit", "pytest", "pytest-cov", "pytest-env", "pytest-timeout", "pytest-xdist", "ruff (>=0.8.0)", "sphinx", "sphinx_autosummary_accessors", "xarray[complete]"]
+etc = ["sparse"]
+io = ["cftime", "fsspec", "h5netcdf", "netCDF4", "pooch", "pydap", "scipy", "zarr"]
+parallel = ["dask[complete]"]
+viz = ["cartopy", "matplotlib", "nc-time-axis", "seaborn"]
+
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "7c1683baf99321006535bed5e8e76cc1179d5ce8d5d54268869d705e06693dc8"
+content-hash = "9c50c6a132688db04cf1e7cc3dd09a6df3a530d670ae346d51cae03a2421d299"

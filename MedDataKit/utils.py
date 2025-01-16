@@ -8,11 +8,11 @@ def column_check(raw_data: pd.DataFrame) -> dict:
     print("Data shape: ", raw_data.shape)
     column_info = {}
     for col in raw_data.columns:
-        missing_rate = raw_data[col].isna().sum() / raw_data.shape[0]
+        missing_rate = (raw_data[col].isna().sum() / raw_data.shape[0]) * 100
         if raw_data[col].nunique() < 20:
-            print(f"{col} ({raw_data[col].dtype} {missing_rate:4.1f}%) => {raw_data[col].nunique()} ({raw_data[col].value_counts().to_dict()})")
+            print(f"{col:30s} ({raw_data[col].dtype} {missing_rate:4.1f}%) => {raw_data[col].nunique()} ({raw_data[col].value_counts().to_dict()})")
         else:
-            print(f"{col} ({raw_data[col].dtype} {missing_rate:4.1f}%) => {raw_data[col].nunique()}")
+            print(f"{col:30s} ({raw_data[col].dtype} {missing_rate:4.1f}%) => {raw_data[col].nunique()}")
 
         column_info[col] = {
             "dtype": raw_data[col].dtype,
