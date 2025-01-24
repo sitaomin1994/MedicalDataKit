@@ -191,55 +191,49 @@ class CodonUsageDataset(Dataset):
 ###################################################################################################################################
 class GENE3494Dataset(Dataset):
 
-    def __init__(self, data_dir, k = 30):
-        super().__init__()
-        self.data_dir = data_dir
-        self.name = 'GENE3494'
+    def __init__(self, k = 30):
+        
+        name = 'gene3494'
+        subject_area = 'Medical'
+        year = 2020
+        url = 'GEO'
+        download_link = ''
+        description = "GEO Dataset 3494"
+        notes = 'Bioinformatics'
+        data_type = 'numerical'
+        source = 'geo'
         self.k = k  # k - number of gene features to use from each platform
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type,
+            source = source
+        )
+        
         self.data_dir = os.path.join(DATA_DIR, self.name)
-
-    def load_raw_data(self):
-        raw_data = self.download_data(self.data_dir)
-        return raw_data
-
-    def load(self):
-
-        # download data
-        raw_data = self.download_data(self.data_dir)
-
-        # specify meta data
-        self.raw_data = raw_data
-        self.sensitive_features = ['age_at_diagnosis']
-        self.drop_features = []
-        self.ordinal_features = []
-        self.binary_features = [
-            'p53_seq_mut_status', 'p53.DLDA_classifier_result', 'PgR_status', 'DSS_EVENT'
-        ]
-        self.multiclass_features = [
-            'DLDA_error', 'Elston_histologic_grade', 'ER_status', 'Lymph_node_status'
-        ]
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
         
-        self.target_features = [
-            'DSS_EVENT'
-        ]
-        self.numerical_features = [
-            col for col in raw_data.columns if col not in self.binary_features + self.multiclass_features + self.ordinal_features
-        ]
-
-        # basic processing
-        self.raw_data = self.basic_processing(raw_data)
-
-    def handle_missing_data(self, data: pd.DataFrame):
-        return data.dropna()
-
-    def download_data(self, data_dir: str):
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
         
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
         # load local files from data_dir
-        df_gene96 = pd.read_csv(os.path.join(data_dir, 'genotype_data_gpl96.csv'))
-        df_gene97 = pd.read_csv(os.path.join(data_dir, 'genotype_data_gpl97.csv'))
-        ttest96 = pd.read_csv(os.path.join(data_dir, 'ttest_results_gpl96.csv'))
-        ttest97 = pd.read_csv(os.path.join(data_dir, 'ttest_results_gpl97.csv'))
-        df_pheno = pd.read_csv(os.path.join(data_dir, 'phenotype_data.csv'))
+        df_gene96 = pd.read_csv(os.path.join(self.data_dir, 'genotype_data_gpl96.csv'))
+        df_gene97 = pd.read_csv(os.path.join(self.data_dir, 'genotype_data_gpl97.csv'))
+        ttest96 = pd.read_csv(os.path.join(self.data_dir, 'ttest_results_gpl96.csv'))
+        ttest97 = pd.read_csv(os.path.join(self.data_dir, 'ttest_results_gpl97.csv'))
+        df_pheno = pd.read_csv(os.path.join(self.data_dir, 'phenotype_data.csv'))
         
         ttest96.sort_values(by = 'p_value', inplace = True, ascending = True)
         feature_set96 = ttest96.loc[:self.k, 'feature'].tolist()
@@ -266,96 +260,105 @@ class GENE3494Dataset(Dataset):
 
         return raw_data
     
-    def get_ml_ready_data(self, task_name: str = None):
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
         
-        from MedDataKit.data_pipe_routines.data_type_routines import basic_data_type_formulation, update_data_type_info
-        from MedDataKit.data_pipe_routines.data_encoding_routines import basic_categorical_encoding
-        from MedDataKit.data_pipe_routines.data_encoding_routines import basic_numerical_encoding
-        from MedDataKit.data_pipe_routines.missing_data_routines import basic_missing_mitigation
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        binary_features = [
+            'p53_seq_mut_status', 'p53.DLDA_classifier_result', 'PgR_status', 'DSS_EVENT'
+        ]
+        multiclass_features = [
+            'DLDA_error', 'Elston_histologic_grade', 'ER_status', 'Lymph_node_status'
+        ]
         
-        data = self.raw_data.copy()
-        data_preprocessing_log = {
-            'raw_data_shape': data.shape
+        numerical_features = [
+            col for col in raw_data.columns if col not in binary_features + multiclass_features + ordinal_features
+        ]
+        
+        target_features = ['DSS_EVENT']
+        sensitive_features = ['age_at_diagnosis']
+        drop_features = []
+        task_names = ['predict_dss_event']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
         }
-                
-        if task_name is None:
-            task_name = 'DSS_EVENT'
         
-        if task_name == 'DSS_EVENT':
-            
-            # specify target and task type
-            target = 'DSS_EVENT'
-            task_type = 'classification'
-            num_classes = data[target].nunique()
-            
-            # specify drop features
-            drop_features = self.target_features.copy()
-            drop_features.remove('DSS_EVENT')
-        else:
-            raise ValueError(f"Task {task_name} is not supported")
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
         
-        ########################################################################################
-        # drop features
-        ########################################################################################
-        data.drop(columns = drop_features, inplace = True)
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
 
-        ########################################################################################
-        # data type formulation
-        ########################################################################################
-        data, data_type_info = basic_data_type_formulation(
-            data = data,
-            numerical_cols = self.numerical_features,
-            ordinal_cols = self.ordinal_features,
-            binary_cols = self.binary_features,
-            multiclass_cols = self.multiclass_features,
-            target_col = target
-        )
-                
-        ########################################################################################
-        # missing data mitigation
-        ########################################################################################
-        data, missing_data_info = basic_missing_mitigation(data, threshold1 = 0.15)
+        if task_name == 'predict_dss_event':
+            target_info = {
+                'target': 'DSS_EVENT',
+                'task_type': 'classification'
+            }
         
-        data_type_info = update_data_type_info(data, data_type_info, target)
-        numerical_features = data_type_info['numerical_feature']
-        categorical_features = data_type_info['categorical_feature']
+        assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
         
-        ########################################################################################
-        # data encoding
-        ########################################################################################
-        data, numerical_encoding_info = basic_numerical_encoding(data, numerical_features)
-        # print(data_encoding_info)
-        # data, data_encoding_info = basic_categorical_encoding(data, categorical_features)
-        # print(data_encoding_info)
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
         
-        data_type_info = update_data_type_info(data, data_type_info, target)
-        numerical_features = data_type_info['numerical_feature']
-        categorical_features = data_type_info['categorical_feature']
-        
-        ########################################################################################
-        # data configuration
-        ########################################################################################
-        data = data[numerical_features + categorical_features + [target]]
-        data_config = {
-            'numerical_feature': numerical_features,
-            'categorical_feature': categorical_features,
-            'target': target,
-            'task_type': task_type,
-            'num_classes': num_classes,
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        return data, {
+            'numerical_features': data_config['numerical_features'],
+            'categorical_features': [],
         }
         
-        data_preprocessing_log.update({
-            'data_type_info': data_type_info,
-            'missing_data_info': missing_data_info,
-            'numerical_encoding_info': numerical_encoding_info,
-            'processed_data_shape': data.shape
-        })
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
         
-        ##########################################################################################
-        # Logging
-        ##########################################################################################
-        print('Data preprocessing log:')
-        print("Raw data shape: ", data_preprocessing_log['raw_data_shape'])  # todo: add more details
-        print("Processed data shape: ", data_preprocessing_log['processed_data_shape'])
-        
-        return data, data_config, data_preprocessing_log
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        return data.dropna(), {}

@@ -152,7 +152,7 @@ class ZigongHeartFailureDataset(Dataset):
                 'outcome.during.hospitalization', 'death.within.28.days', 'death.within.3.months', 
                 'death.within.6.months', 're.admission.within.28.days', 're.admission.within.3.months', 
                 're.admission.within.6.months', 'return.to.emergency.department.within.6.months',
-                'GCS', 'dischargeDay', 'time.of.death..days.from.admission.', 
+                'dischargeDay', 'time.of.death..days.from.admission.', 
                 're.admission.time..days.from.admission.', 'time.to.emergency.department.within.6.months'
             ],
             'clinical_status': [
@@ -732,7 +732,9 @@ class MIComplicationsDataset(Dataset):
             'patient_info': [
                 'AGE', 'SEX', 'INF_ANAM', 'STENOK_AN', 'FK_STENOK', 'IBS_POST', 'IBS_NASL', 'GB', 'SIM_GIPERT', 'DLIT_AG', 'ZSN_A', 
                 'nr11', 'nr01', 'nr02', 'nr03', 'nr04', 'nr07', 'nr08', 'np01', 'np04', 'np05', 'np07', 'np08', 'np09', 'np10', 
-                'endocr01', 'endocr02', 'endocr03', 'zableg01', 'zableg02', 'zableg03', 'zableg04', 'zableg06'
+                'endocr01', 'endocr02', 'endocr03', 'zableg01', 'zableg02', 'zableg03', 'zableg04', 'zableg06',
+                'LET_IS', 'A_V_BLOK', 'JELUD_TAH', 'P_IM_STEN', 'REC_IM', 'PREDS_TAH', 'RAZRIV', 'DRESSLER', 'FIBR_JELUD', 
+                'FIBR_PREDS', 'ZSN', 'OTEK_LANC'
             ],
             'clinical_info': [
                 'S_AD_KBRIG', 'D_AD_KBRIG', 'S_AD_ORIT', 'D_AD_ORIT', 'O_L_POST', 'K_SH_POST', 'MP_TP_POST', 'SVT_POST', 'GT_POST', 
@@ -1290,7 +1292,7 @@ class ARI2Dataset(Dataset):
         feature_groups = {
             'demongraphic': [
                 'weight', 'age', 'country', 'wght', 'lgth', 'waz', 'wam', 'biwt', 'hcir', 'bat',
-                'smi2', 'mvm', 'afe', 'absu', 'nut',     
+                'smi2', 'mvm', 'afe', 'absu', 'nut', 'Y', 'Y_death'    
             ],
             'past_history': [
                 'illd', 'daydth', 'cprot', 'cdip', 'clin', 'impcl', 'saogp', 'omph', 'conj', 
@@ -1515,7 +1517,8 @@ class RHCDataset(Dataset):
         
         feature_groups = {
             'demographic': [
-                'sadmdte', 'dschdte', 'dthdte', 'lstctdte', 'age', 'sex', 'edu', 'race', 'income', 'ninsclas', 'ptid'
+                'sadmdte', 'dschdte', 'dthdte', 'lstctdte', 'age', 'sex', 'edu', 'race', 'income', 'ninsclas', 'ptid',
+                'death', 'dth30'
             ],
             'admission_diagnosis': [
                 'cat1', 'cat2', 'resp', 'card', 'neuro', 'gastr', 'renal', 'meta', 'hema', 'seps', 
@@ -1726,7 +1729,7 @@ class CrashDataset(Dataset):
         feature_groups = {
             'demongraphic': [
                 'source', 'trandomised', 'outcomeid', 'sex', 'age', 'injurytime', 'injurytype', 'ddeath', 'scauseother',
-                'status', 'ddischarge', 'ndaysicu', 'boxid', 'packnum'
+                'status', 'ddischarge', 'ndaysicu', 'boxid', 'packnum', 'condition', 'cause', 'death'
             ],
             'clinical_status': [
                 'sbp', 'rr', 'cc', 'hr',  'gcseye', 'gcsmotor', 'gcsverbal', 'gcs', 
@@ -1926,7 +1929,7 @@ class SupportDataset(Dataset):
         feature_groups = {
             'demographic': [
                 'age', 'sex', 'race', 'edu', 'income', 'slos', 'd.time', 'charges', 'totcst', 'totmcst',
-                'dnr', 'dnrday'
+                'dnr', 'dnrday', 'death', 'hospdead', 'hday'
             ],
             'comorbidity': ['dzgroup', 'dzclass', 'num.co', 'scoma', 'diabetes', 'dementia', 'ca'],
             'clinical_status': [
@@ -2135,7 +2138,7 @@ class CIBMTRHCTSurvivalDataset(Dataset):
         
         sensitive_features = ['ethnicity', 'race_group']
         drop_features = []
-        task_names = ['predict_survival', 'predict_efs', 'predict_efs_time']
+        task_names = ['predict_efs', 'predict_survival', 'predict_efs_time']
         
         feature_groups = {}
         fed_cols = []
@@ -2746,7 +2749,6 @@ class NasarianCADDataset(Dataset):
         # TODO: reformat this in the future
         if drop_unused_targets == True:
             print(f"For this dataset, drop_unused_targets True is considered as False. No target features will be dropped.")
-            warnings.warn(f"For this dataset, drop_unused_targets function is not supported.")
         
         assert (target_info['target'] in data.columns), "Target feature not found in data"
         
@@ -2791,7 +2793,12 @@ class NasarianCADDataset(Dataset):
             data: pd.DataFrame, processed data
             missing_data_info: dict, missing data processing information
         """
-        missing_data_handler = BasicMissingDataHandler(threshold1 = 0.5, threshold2 = 0.2)
+        missing_data_handler = BasicMissingDataHandler(
+            threshold1_num = 0.5, 
+            threshold2_num = 0.2, 
+            threshold1_cat = 0.5, 
+            threshold2_cat = 0.2
+        )
         data, missing_data_info = missing_data_handler.handle_missing_data(data, categorical_features)
         assert data.isna().sum().sum() == 0, "Missing data is not handled"
         return data, missing_data_info

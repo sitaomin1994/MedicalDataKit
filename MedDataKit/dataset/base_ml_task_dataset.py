@@ -240,10 +240,16 @@ class MLTaskDataset:
                         ('minmax', MinMaxScaler())
                     ])
                 elif self.numerical_encoding == 'quantile':
-                    numerical_pipeline = Pipeline([
-                        ('scaler', QuantileTransformer(output_distribution='normal', random_state=42)),
-                        ('minmax', MinMaxScaler())
-                    ])
+                    if len(data_num) > 1000:
+                        numerical_pipeline = Pipeline([
+                            ('scaler', QuantileTransformer(output_distribution='normal', random_state=42, n_quantiles=1000)),
+                            ('minmax', MinMaxScaler())
+                        ])
+                    else:
+                        numerical_pipeline = Pipeline([
+                            ('scaler', QuantileTransformer(output_distribution='normal', random_state=42, n_quantiles=len(data_num))),
+                            ('minmax', MinMaxScaler())
+                        ])
                 elif self.numerical_encoding == 'yeo-johnson':
                     numerical_pipeline = Pipeline([
                         ('scaler', PowerTransformer(method='yeo-johnson')),
