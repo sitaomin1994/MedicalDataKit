@@ -1,4 +1,3 @@
-from sklearn.datasets import fetch_openml
 import os
 import pandas as pd
 from abc import ABC, abstractmethod
@@ -8,17 +7,13 @@ import tarfile
 import zipfile
 import os
 import pandas as pd
-import requests
 import io
 import pyreadr
 import shutil
-import requests
 import zipfile
 import io
 import os
-import kaggle as kg
 from dotenv import load_dotenv
-
 from config import DATA_DIR, DATA_DOWNLOAD_DIR
 
 
@@ -72,6 +67,7 @@ class UCIMLDownloader(DownLoader):
             zipfile_path = os.path.join(download_dir, zipfile_name)
             # check if the zip file exists, if not, download and save zip file
             if not os.path.exists(zipfile_path):
+                import requests
                 # download data and unzip to download_dir
                 response = requests.get(url)
                 
@@ -107,29 +103,17 @@ class KaggleDownloader(DownLoader):
         file_names: list[str], 
         download_all: bool = False,
         competition: bool = False,
-        zipfile_name: str = None
     ):
         
         self.dataset_name = dataset_name
         self.file_names = file_names
         self.download_all = download_all
         self.competition = competition
-        self.zipfile_name = zipfile_name
         super().__init__()
         
     def _custom_download(self, data_dir: str):
 
         try:
-            # load kaggle username and key from .env file
-            dotenv_path = '.env'
-            load_dotenv(dotenv_path)
-            kaggle_username = os.getenv('KAGGLE_USERNAME')
-            kaggle_key = os.getenv('KAGGLE_KEY')
-
-            # init kaggle api by setting kaggle.json
-            KaggleDownloader.init_on_kaggle(kaggle_username, kaggle_key)
-            kg.api.authenticate()
-
             # download data based on the parameters    
             download_dir = os.path.join(data_dir)
             if not os.path.exists(download_dir):
@@ -145,6 +129,15 @@ class KaggleDownloader(DownLoader):
                     zipfile_name = dataset_name.split('/')[-1] + '.zip'
                     zipfile_path = os.path.join(download_dir, zipfile_name)
                     if not os.path.exists(zipfile_name):
+                        import kaggle as kg
+                        dotenv_path = '.env'
+                        load_dotenv(dotenv_path)
+                        kaggle_username = os.getenv('KAGGLE_USERNAME')
+                        kaggle_key = os.getenv('KAGGLE_KEY')
+
+                        # init kaggle api by setting kaggle.json
+                        KaggleDownloader.init_on_kaggle(kaggle_username, kaggle_key)
+                        kg.api.authenticate()
                         kg.api.dataset_download_files(dataset_name, path=download_dir, unzip = False)
                     
                     # unzip zip file
@@ -156,6 +149,15 @@ class KaggleDownloader(DownLoader):
                 else:
                     for file_name in file_names:
                         if not os.path.exists(os.path.join(download_dir, file_name)):
+                            import kaggle as kg
+                            dotenv_path = '.env'
+                            load_dotenv(dotenv_path)
+                            kaggle_username = os.getenv('KAGGLE_USERNAME')
+                            kaggle_key = os.getenv('KAGGLE_KEY')
+
+                            # init kaggle api by setting kaggle.json
+                            KaggleDownloader.init_on_kaggle(kaggle_username, kaggle_key)
+                            kg.api.authenticate()
                             kg.api.dataset_download_file(dataset_name, file_name, path=download_dir)
             else:
                 competition_name = self.dataset_name
@@ -166,6 +168,15 @@ class KaggleDownloader(DownLoader):
                     zipfile_name = competition_name.split('/')[-1] + '.zip'
                     zipfile_path = os.path.join(download_dir, zipfile_name)
                     if not os.path.exists(zipfile_name):
+                        import kaggle as kg
+                        dotenv_path = '.env'
+                        load_dotenv(dotenv_path)
+                        kaggle_username = os.getenv('KAGGLE_USERNAME')
+                        kaggle_key = os.getenv('KAGGLE_KEY')
+
+                        # init kaggle api by setting kaggle.json
+                        KaggleDownloader.init_on_kaggle(kaggle_username, kaggle_key)
+                        kg.api.authenticate()
                         kg.api.competition_download_files(competition_name, path=download_dir, quiet = False)
                     
                     # unzip zip file
@@ -176,6 +187,15 @@ class KaggleDownloader(DownLoader):
                 else:
                     for file_name in file_names:
                         if not os.path.exists(os.path.join(download_dir, file_name)):
+                            import kaggle as kg
+                            dotenv_path = '.env'
+                            load_dotenv(dotenv_path)
+                            kaggle_username = os.getenv('KAGGLE_USERNAME')
+                            kaggle_key = os.getenv('KAGGLE_KEY')
+
+                            # init kaggle api by setting kaggle.json
+                            KaggleDownloader.init_on_kaggle(kaggle_username, kaggle_key)
+                            kg.api.authenticate()
                             kg.api.competition_download_file(competition_name, file_name, path=download_dir)
                         
             return True
@@ -242,6 +262,7 @@ class RDataDownloader(DownLoader):
             error_happened = False
             try:
                 # download the package
+                import requests
                 response = requests.get(self.package_url)
                 tar_content = io.BytesIO(response.content)
                 
@@ -276,14 +297,16 @@ class OpenMLDownloader(DownLoader):
             download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
-
-            X, y = fetch_openml(data_id=self.data_id, as_frame=True, return_X_y=True)
-            data = X.join(y)
-
-            # save the data to the specified path
-            data.to_csv(os.path.join(download_dir, 'data.csv'), index=False)
-
-            return True
+            
+            if os.path.exists(os.path.join(download_dir, 'data.csv')):
+                return True
+            else:
+                from sklearn.datasets import fetch_openml
+                X, y = fetch_openml(data_id=self.data_id, as_frame=True, return_X_y=True)
+                data = X.join(y)
+                # save the data to the specified path
+                data.to_csv(os.path.join(download_dir, 'data.csv'), index=False)
+                return True
         
         except Exception as e:
             print(e)
@@ -309,6 +332,7 @@ class URLDownloader(DownLoader):
             # check if the file exists, if not, download and save file
             if not os.path.exists(file_path):
                 # download data and unzip to download_dir
+                import requests
                 response = requests.get(url)
                 
                 # save response content to file_path
