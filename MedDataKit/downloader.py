@@ -106,13 +106,15 @@ class KaggleDownloader(DownLoader):
         self, dataset_name: str, 
         file_names: list[str], 
         download_all: bool = False,
-        competition: bool = False
+        competition: bool = False,
+        zipfile_name: str = None
     ):
         
         self.dataset_name = dataset_name
         self.file_names = file_names
         self.download_all = download_all
         self.competition = competition
+        self.zipfile_name = zipfile_name
         super().__init__()
         
     def _custom_download(self, data_dir: str):
