@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "MedDataKit"
-version = "0.0.7"
+version = "0.0.9"
 description = "Medical Public Data Kit"
 authors = ["Sitao Min <sitaomin1994@gmail.com>"]
 readme = "README.md"

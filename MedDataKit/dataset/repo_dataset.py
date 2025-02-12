@@ -10,6 +10,7 @@ from ..downloader import OpenMLDownloader
 from ..downloader import RDataDownloader
 from ..downloader import KaggleDownloader
 from ..downloader import UCIMLDownloader
+from ..downloader import URLDownloader
 from .base_dataset import Dataset
 from .base_raw_dataset import RawDataset
 from .base_ml_task_dataset import MLTaskDataset, MLTaskPreparationConfig
