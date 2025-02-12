@@ -128,7 +128,7 @@ class KaggleDownloader(DownLoader):
                 if download_all:
                     zipfile_name = dataset_name.split('/')[-1] + '.zip'
                     zipfile_path = os.path.join(download_dir, zipfile_name)
-                    if not os.path.exists(zipfile_name):
+                    if not os.path.exists(zipfile_path):
                         import kaggle as kg
                         dotenv_path = '.env'
                         load_dotenv(dotenv_path)
@@ -167,7 +167,7 @@ class KaggleDownloader(DownLoader):
                 if download_all:
                     zipfile_name = competition_name.split('/')[-1] + '.zip'
                     zipfile_path = os.path.join(download_dir, zipfile_name)
-                    if not os.path.exists(zipfile_name):
+                    if not os.path.exists(zipfile_path):
                         import kaggle as kg
                         dotenv_path = '.env'
                         load_dotenv(dotenv_path)
