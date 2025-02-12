@@ -494,7 +494,7 @@ class MIMIC2IACDataset(Dataset):
                 'task_type': 'classification'
             }
             data = data.drop(columns=['hosp_exp_flg'])
-        elif task_name == 'predict_los':
+        elif task_name == 'predict_icu_los':
             target_info = {
                 'target': 'icu_los_day',
                 'task_type': 'regression'
@@ -813,6 +813,8 @@ class MIComplicationsDataset(Dataset):
             
             complications = target_features.copy()
             complications.remove('LET_IS')
+            for col in complications:
+                data[col] = data[col].astype(float)
             data['num_complications'] = data.apply(lambda row: sum(row[complications]), axis = 1)
             
             target_info = {
@@ -1060,7 +1062,7 @@ class DiabeticHospitalDataset(Dataset):
             data: pd.DataFrame, processed data
             target_info: dict, target information
         """
-        
+        data_config = data_config.copy()
         # drop features
         drop_cols = [
             'patient_nbr', 'diag_2', 'diag_3', 'encounter_id',
@@ -1969,25 +1971,26 @@ class SupportDataset(Dataset):
             data: pd.DataFrame, processed data
             target_info: dict, target information
         """
-
+        drop_cols = ['sps', 'aps', 'prg2m', 'prg6m', 'surv2m', 'surv6m', 'd.time', 'dnr', 'dnrday']
+        
         if task_name == 'predict_hospdead':
             target_info = {
                 'target': 'hospdead',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['hday', 'death'])
+            data = data.drop(columns=['hday', 'death'] + drop_cols)
         elif task_name == 'predict_hday':
             target_info = {
                 'target': 'hday',
                 'task_type': 'regression'
             }
-            data = data.drop(columns=[])
+            data = data.drop(columns=['hospdead', 'death'] + drop_cols)
         elif task_name == 'predict_death':
             target_info = {
                 'target': 'death',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['hospdead'])
+            data = data.drop(columns=['hospdead', 'hday'] + drop_cols)
         else:
             raise ValueError(f"task name {task_name} is not supported")
         
@@ -2138,7 +2141,7 @@ class CIBMTRHCTSurvivalDataset(Dataset):
         
         sensitive_features = ['ethnicity', 'race_group']
         drop_features = []
-        task_names = ['predict_efs', 'predict_survival', 'predict_efs_time']
+        task_names = ['predict_survival', 'predict_efs_time']
         
         feature_groups = {}
         fed_cols = []
@@ -2174,17 +2177,17 @@ class CIBMTRHCTSurvivalDataset(Dataset):
         """
         
         if task_name == 'predict_survival':
-            data['time_event_survival'] = data.apply(lambda row: f"{row['efs']}|{row['efs_time']}", axis = 1)
+            from lifelines import KaplanMeierFitter
+            fitter = KaplanMeierFitter()
+            data['efs'] = data['efs'].astype(float)
+            fitter.fit(data['efs_time'], data['efs'])
+            target = fitter.predict(data['efs_time']).reset_index(drop = True)
+            data['survival_risk'] = target
             target_info = {
-                'target': 'time_event_survival',
-                'task_type': 'survival'
+                'target': 'survival_risk',
+                'task_type': 'regression'
             }
             data = data.drop(columns = ['efs', 'efs_time'])
-        elif task_name == 'predict_efs':
-            target_info = {
-                'target': 'efs',
-                'task_type': 'classification'
-            }
         elif task_name == 'predict_efs_time':
             target_info = {
                 'target': 'efs_time',
@@ -2330,7 +2333,7 @@ class HCCSurvivalDataset(Dataset):
         }
         multiclass_features = []
         binary_features = ['Gender', 'Class', 'Symptoms', 'Alcohol', 'Hepatitis B Surface Antigen', 'Hepatitis B e Antigen', 
-            'Hepatitis C Virus Antibody', 'Cirrhosis', 'Endemic Countries', 'Smoking', 'Diabetes', 'Obesity', 
+            'Hepatitis C Virus Antibody', 'Hepatitis B Core Antibody', 'Cirrhosis', 'Endemic Countries', 'Smoking', 'Diabetes', 'Obesity', 
             'Hemochromatosis', 'Arterial Hypertension', 'Chronic Renal Insufficiency', 'Human Immunodeficiency Virus', 
             'Nonalcoholic Steatohepatitis', 'Esophageal Varices', 'Splenomegaly', 'Portal Hypertension', 
             'Portal Vein Thrombosis', 'Liver Metastasis', 'Radiological Hallmark']

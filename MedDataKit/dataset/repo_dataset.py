@@ -954,10 +954,10 @@ class BoneTransplantDataset(Dataset):
             if col not in numerical_features + multiclass_features + ordinal_features
         ]
         
-        target_features = ['survival_status']
+        target_features = ['survival_status', 'survival_time']
         sensitive_features = ['Recipientgender']
         drop_features = []
-        task_names = ['predict_survival_status', 'predict_survival']
+        task_names = ['predict_survival', 'predict_survival_time']
         
         feature_groups = {}
         fed_cols = []
@@ -993,19 +993,24 @@ class BoneTransplantDataset(Dataset):
         """
 
         if task_name == 'predict_survival':
-            data['survival_encoded'] = data.apply(
-                lambda row: f"{row['survival_status']}|{row['survival_time']}", axis = 1
-            )
+            from lifelines import KaplanMeierFitter
+            fitter = KaplanMeierFitter()
+            data['survival_status'] = data['survival_status'].astype(float)
+            fitter.fit(data['survival_time'], data['survival_status'])
+            target = fitter.predict(data['survival_time']).reset_index(drop = True)
+            data['survival_risk'] = target
             data = data.drop(columns = ['survival_status', 'survival_time'])
             target_info = {
-                'target': 'survival_encoded',
-                'task_type': 'survival'
+                'target': 'survival_risk',
+                'task_type': 'regression'
             }
-        elif task_name == 'predict_survival_status':
+        elif task_name == 'predict_survival_time':
             target_info = {
-                'target': 'survival_status',
-                'task_type': 'classification'
+                'target': 'survival_time',
+                'task_type': 'regression'
             }
+        else:
+            raise ValueError(f"task_name {task_name} is not supported for {self.name} dataset")
         
         assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
         

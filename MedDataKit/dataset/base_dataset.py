@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, Tuple
 from MedDataKit.dataset.base_raw_dataset import RawDataset
 from MedDataKit.dataset.base_ml_task_dataset import MLTaskDataset, MLTaskPreparationConfig
 from MedDataKit.utils import update_feature_type
+from copy import deepcopy
 
 class Dataset(ABC):
     
@@ -112,7 +113,7 @@ class Dataset(ABC):
         raw_data, ordinal_feature_codes = self.raw_dataset.factorize_ordinal_features(
             raw_data, self.raw_dataset.ordinal_features
         )
-        raw_data_config = self.raw_dataset.raw_data_config
+        raw_data_config = deepcopy(self.raw_dataset.raw_data_config)
         
         if verbose:
             print("Raw data shape: ", raw_data.shape)
