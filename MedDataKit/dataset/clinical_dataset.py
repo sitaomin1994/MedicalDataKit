@@ -418,7 +418,8 @@ class MIMIC2IACDataset(Dataset):
             'icu_los_day', 'age', 'weight_first', 'bmi', 'sapsi_first', 'sofa_first', 
             'day_icu_intime_num', 'hour_icu_intime', 'mort_day_censored', 'map_1st', 'hr_1st', 'temp_1st', 
             'spo2_1st', 'abg_count', 'wbc_first', 'hgb_first', 'platelet_first', 'sodium_first', 'potassium_first',
-            'tco2_first', 'chloride_first', 'bun_first', 'creatinine_first', 'po2_first', 'pco2_first', 'iv_day_1'
+            'tco2_first', 'chloride_first', 'bun_first', 'creatinine_first', 'po2_first', 'pco2_first', 'iv_day_1',
+            'hospital_los_day'
         ]
         multiclass_features = [
             'service_unit', 'day_icu_intime'
@@ -429,10 +430,19 @@ class MIMIC2IACDataset(Dataset):
             if col not in numerical_features + multiclass_features + ordinal_features
         ]
         
-        target_features = ['hosp_exp_flg', 'icu_exp_flg', 'icu_los_day', 'hospital_los_day']
+        target_features = [
+            'hosp_exp_flg', 'icu_exp_flg', 'icu_los_day', 'hospital_los_day', 'censor_flg', 'day_28_flg'
+        ]
         sensitive_features = ['age']
         drop_features = []
-        task_names = ['predict_hosp_expire', 'predict_icu_expire', 'predict_icu_los', 'predict_hospital_los']
+        task_names = [
+            'predict_censor',
+            'predict_hosp_expire',
+            'predict_day_28',  
+            'predict_icu_expire', 
+            'predict_icu_los', 
+            'predict_hospital_los'
+        ]
         
         feature_groups = {
             'demongraphic': [
@@ -487,25 +497,37 @@ class MIMIC2IACDataset(Dataset):
                 'target': 'hosp_exp_flg',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['icu_exp_flg'])
+            data = data.drop(columns=['icu_exp_flg', 'day_28_flg', 'censor_flg', 'hospital_los_day', 'icu_los_day'])
         elif task_name == 'predict_icu_expire':
             target_info = {
                 'target': 'icu_exp_flg',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['hosp_exp_flg'])
+            data = data.drop(columns=['hosp_exp_flg', 'day_28_flg', 'censor_flg', 'hospital_los_day', 'icu_los_day'])
         elif task_name == 'predict_icu_los':
             target_info = {
                 'target': 'icu_los_day',
                 'task_type': 'regression'
             }
-            data = data.drop(columns=['hosp_exp_flg', 'icu_exp_flg', 'hospital_los_day'])
+            data = data.drop(columns=['hosp_exp_flg', 'icu_exp_flg', 'hospital_los_day', 'day_28_flg', 'censor_flg'])
         elif task_name == 'predict_hospital_los':
             target_info = {
                 'target': 'hospital_los_day',
                 'task_type': 'regression'
             }
-            data = data.drop(columns=['hosp_exp_flg', 'icu_exp_flg', 'icu_los_day'])
+            data = data.drop(columns=['hosp_exp_flg', 'icu_exp_flg', 'icu_los_day', 'day_28_flg', 'censor_flg'])
+        elif task_name == 'predict_day_28':
+            target_info = {
+                'target': 'day_28_flg',
+                'task_type': 'classification'
+            }
+            data = data.drop(columns=['hosp_exp_flg', 'icu_exp_flg', 'icu_los_day', 'hospital_los_day', 'censor_flg'])
+        elif task_name == 'predict_censor':
+            target_info = {
+                'target': 'censor_flg',
+                'task_type': 'classification'
+            }
+            data = data.drop(columns=['hosp_exp_flg', 'icu_exp_flg', 'icu_los_day', 'hospital_los_day', 'day_28_flg'])
         else:
             raise ValueError(f"task name {task_name} is not supported")
         
@@ -725,7 +747,7 @@ class MIComplicationsDataset(Dataset):
         sensitive_features = ['AGE', 'SEX']
         drop_features = []
         task_names = [
-            'predict_lethal', 'predict_lethal_binary', 'predict_heart_failure', 'predict_num_complications'
+            'predict_lethal_binary', 'predict_lethal', 'predict_heart_failure', 'predict_num_complications'
         ]
         
         feature_groups = {
@@ -793,8 +815,7 @@ class MIComplicationsDataset(Dataset):
             data = data.drop(columns=target_features)
         
         elif task_name == 'predict_lethal_binary':
-            
-            data['LET_IS_binary'] = data['LET_IS'].apply(lambda x: 1 if x == 'L' else 0)
+            data['LET_IS_binary'] = data['LET_IS'].apply(lambda x: 1 if x == '0' else 0)
             
             target_info = {
                 'target': 'LET_IS_binary',
@@ -1349,13 +1370,13 @@ class ARI2Dataset(Dataset):
                 'target': 'Y',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['Y_death'])
+            data = data.drop(columns=['Y_death', 'saogp'])
         elif task_name == 'predict_Y_death':
             target_info = {
                 'target': 'Y_death',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['Y'])
+            data = data.drop(columns=['Y', 'saogp'])
         else:
             raise ValueError(f"task name {task_name} is not supported")
         
@@ -1573,13 +1594,13 @@ class RHCDataset(Dataset):
                 'target': 'death',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['dth30'])
+            data = data.drop(columns=['dth30', 'dthdte', 't3d30'])
         elif task_name == 'predict_dth30':
             target_info = {
                 'target': 'dth30',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['death'])
+            data = data.drop(columns=['death', 'dthdte', 't3d30'])
         else:
             raise ValueError(f"task name {task_name} is not supported")
         
@@ -1726,7 +1747,7 @@ class CrashDataset(Dataset):
         target_features = ['condition', 'death', 'cause']
         sensitive_features = ["age", "sex"]
         drop_features = ['outcomeid', "scauseother", "status", 'ddeath', 'boxid', 'packnum']
-        task_names = ['predict_death', 'predict_condition', 'predict_cause']
+        task_names = ['predict_condition', 'predict_death', 'predict_cause']
         
         feature_groups = {
             'demongraphic': [
@@ -1777,18 +1798,19 @@ class CrashDataset(Dataset):
                 'target': 'death',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['condition'])
+            data = data.drop(columns=['condition', 'cause', 'ddischarge'])
         elif task_name == 'predict_condition':
             target_info = {
                 'target': 'condition',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['death'])
+            data = data.drop(columns=['death', 'ddischarge', 'cause'])
         elif task_name == 'predict_cause':
             target_info = {
                 'target': 'cause',
                 'task_type': 'classification'
             }
+            data = data.drop(columns=['death', 'condition', 'ddischarge'])
         else:
             raise ValueError(f"task name {task_name} is not supported")
         
@@ -1926,7 +1948,7 @@ class SupportDataset(Dataset):
         target_features = ['hospdead', 'hday', 'death']
         sensitive_features = ['age', 'sex', 'race']
         drop_features = []
-        task_names = ['predict_hospdead', 'predict_hday', 'predict_death']
+        task_names = ['predict_death', 'predict_hospdead', 'predict_hday']
         
         feature_groups = {
             'demographic': [
@@ -1978,7 +2000,7 @@ class SupportDataset(Dataset):
                 'target': 'hospdead',
                 'task_type': 'classification'
             }
-            data = data.drop(columns=['hday', 'death'] + drop_cols)
+            data = data.drop(columns=['hday', 'death', 'sfdm2'] + drop_cols)
         elif task_name == 'predict_hday':
             target_info = {
                 'target': 'hday',
@@ -2121,8 +2143,12 @@ class CIBMTRHCTSurvivalDataset(Dataset):
         """
         data_dictionary = pd.read_csv(os.path.join(self.data_dir, 'data_dictionary.csv'))
         
-        numerical_features = data_dictionary[data_dictionary['type'] == 'Numerical']['variable'].tolist()
-        numerical_features = [item.replace(' ', '_') for item in numerical_features]
+        numerical_features = [
+            'hla_high_res_8', 'hla_high_res_6', 'hla_low_res_8', 'hla_low_res_6', 'hla_high_res_10', 'hla_low_res_10',
+            'year_hct', 'donor_age', 'age_at_hct', 'comorbidity_score', 'karnofsky_score', 
+            'efs_time'
+        ]
+        
         binary_features = []
         multiclass_features = []
         for column in raw_data.columns:

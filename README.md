@@ -15,3 +15,45 @@
 
 
 raw_data_files (original downloaded data files) -> raw_data (centralized data, federated data) -> ML-ready data (data ready for performing ML tasks)
+
+
+## Included Datasets
+
+### clinical dataset
+
+- ZigongHeartFailureDataset
+- MIMIC2IACDataset
+- MIComplicationsDataset
+- DiabeticHospitalDataset
+- ARI2Dataset
+- SupportDataset
+- CIBMTRHCTSurvivalDataset
+- CrashDataset
+- RHCDataset
+- HCCSurvivalDataset
+- ZAlizadehsaniDataset
+- NasarianCADDataset
+
+### repo dataset
+
+- ArrhythmiaDataset
+- ColposcopyDataset
+- SPECTFDataset
+- BreastCancerWisconsinDataset
+- DermatologyDataset
+- BoneTransplantDataset
+- ParkinsonsDataset
+- CervicalRiskDataset
+- BacteremiaDataset
+- FetalCTGDataset
+
+### bioinfo dataset
+
+- CodonUsageDataset
+- GENE3494Dataset
+
+## APP
+
+```
+shiny run --reload --launch-browser shiny-app/app.py
+```

@@ -102,12 +102,13 @@ class MLTaskDataset:
         self.numerical_features = numerical_features
         self.categorical_features = categorical_features
         self.categorical_feature_codes = {}
+        self.cat_feature_ordinal_mapping = {}
         
         # Data Processing Options
         self.categorical_encoding = categorical_encoding
         self.numerical_encoding = numerical_encoding
         self.n_jobs = n_jobs
-        self.one_hot_cols = []
+        self.cols_not_onehot = []
         
         # Federated
         self.fed_cols = []
@@ -155,14 +156,15 @@ class MLTaskDataset:
     @property
     def data_config(self):
         return {
-            'numerical_features': self.numerical_features,
-            'categorical_features': self.categorical_features,
-            'categorical_feature_codes': self.categorical_feature_codes,
             'target_feature': self.target_feature,
             'task_type': self.task_type,
             'target_codes': self.target_codes,
             'clf_type': self.clf_type,
             'num_classes': self.num_classes,
+            'numerical_features': self.numerical_features,
+            'categorical_features': self.categorical_features,
+            'categorical_feature_codes': self.categorical_feature_codes,
+            'cat_feature_ordinal_mapping': self.cat_feature_ordinal_mapping,
         }
     
     def _validate_config(self):
@@ -265,18 +267,32 @@ class MLTaskDataset:
         ##################################################################################################   
         # Categorical Encoding
         data_cat = self.data[self.categorical_features].copy().astype(str)
+        print(self.categorical_features)
         
         if len(data_cat) > 0:
-                    
+            
+            # conduct oridinal encoding first and save encoded and original feature category mapping to class
+            ordinal_encoder = OrdinalEncoder()
+            ordinal_encoder.set_output(transform='pandas')
+            data_cat = ordinal_encoder.fit_transform(data_cat).astype(int)
+            self.cat_feature_ordinal_mapping = {
+                feature: {i: cat for i, cat in enumerate(ordinal_encoder.categories_[j])}
+                for j, feature in enumerate(data_cat.columns)
+            }
+            
+            # catgorircal feature encoding
             if self.categorical_encoding == 'onehot':
                 categorical_encoder = OneHotEncoder(
                     drop = 'first', sparse_output=False, max_categories=20, handle_unknown='error',
+                    feature_name_combiner = 'concat'
                 )
-                self.one_hot_cols = data_cat.columns.tolist()
+                
+                self.cols_not_onehot = []
             
             elif self.categorical_encoding == 'ordinal':
                 categorical_encoder = OrdinalEncoder()
-            
+                self.cols_not_onehot = data_cat.columns.tolist()
+
             elif self.categorical_encoding == 'mixed':
                 # High cardinality categorical features are encoded using OrdinalEncoder
                 # Low cardinality categorical features are encoded using OneHotEncoder
@@ -293,7 +309,7 @@ class MLTaskDataset:
                     drop = 'first', sparse_output=False, max_categories=20, handle_unknown='error', 
                 )
                 
-                self.one_hot_cols = low_cardinality_features
+                self.cols_not_onehot = high_cardinality_features
                 
                 transformers = [
                     ('cat_high', high_cardinality_encoder, high_cardinality_features),
@@ -310,7 +326,8 @@ class MLTaskDataset:
             
             self.categorical_features = data_cat.columns.tolist()
             self.categorical_feature_codes = {
-                feature: list(data_cat[feature].unique()) for feature in data_cat.columns
+                feature: [int(x) for x in data_cat[feature].unique()] 
+                for feature in data_cat.columns
             }
         
         ##################################################################################################   
@@ -324,7 +341,11 @@ class MLTaskDataset:
         missing_ratio = self.data.isna().sum().sum() / (self.data.shape[0] * self.data.shape[1])
         print("="*100)
         print(f"Task name: {self.task_name}  Task type: {self.task_type}")
-        print(f"Target: {self.target_feature} Num classes: {self.num_classes}")
+        if self.task_type == 'classification':
+            target_value_counts = self.data[self.target_feature].value_counts()
+            print(f"Target: {self.target_feature} Num classes: {self.num_classes} (classes: {target_value_counts.to_dict()})")
+        else:
+            print(f"Target: {self.target_feature} Num classes: {self.num_classes}")
         print(f'Data Shape: {self.data.shape} (num {len(self.numerical_features)} cat {len(self.categorical_features)})')
         print(f'Missing ratio: {missing_ratio*100:4.1f}%')
         print(f"Feature Groups:")
@@ -344,7 +365,6 @@ class MLTaskDataset:
             return
         
         updated_feature_groups = {group_name: [] for group_name in self.feature_groups.keys()}
-        
         ##################################################################################################
         # for each feature, find the group name
         for col in self.data.columns:
@@ -357,12 +377,16 @@ class MLTaskDataset:
             if col in self.categorical_features:
                 
                 # ordinal features, name is the original feature name
-                if col not in self.one_hot_cols:
+                if col in self.cols_not_onehot:
                     col_name_original = col
+                    
                 # one-hot features, name is the original feature name + '_' + category
                 else:
-                    col_name_original = col.split('_')[:-1]
-                    col_name_original = '_'.join(col_name_original)
+                    if col.endswith('_infrequent_sklearn'):
+                        col_name_original = col.replace('_infrequent_sklearn', '')
+                    else:
+                        col_name_original = col.split('_')[:-1]
+                        col_name_original = '_'.join(col_name_original)
                 
                 for group_name, features in self.feature_groups.items():
                     if col_name_original in features:

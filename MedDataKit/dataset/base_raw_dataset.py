@@ -169,17 +169,14 @@ class RawDataset:
         ), f"Some columns are not included in meta data: {missing_cols1} and {missing_cols2}"
         
         # Verify all elements of the target features, sensitive features, and drop features are in the data
-        assert (
-            all(True if feature in data.columns else False for feature in self.sensitive_features)
-        ), "Some specified sensitive features are not in the data"
+        not_in_features = [feature for feature in self.sensitive_features if feature not in data.columns]
+        assert len(not_in_features) == 0, f"Some specified sensitive features are not in the data: {not_in_features}"
         
-        assert (
-            all(True if feature in data.columns else False for feature in self.target_features)
-        ), "Some specified target features are not in the data"
+        not_in_features = [feature for feature in self.target_features if feature not in data.columns]
+        assert len(not_in_features) == 0, f"Some specified target features are not in the data: {not_in_features}"
         
-        assert (
-            all(True if feature in data.columns else False for feature in self.drop_features)
-        ), "Some specified drop features are not in the data"
+        not_in_features = [feature for feature in self.drop_features if feature not in data.columns]
+        assert len(not_in_features) == 0, f"Some specified drop features are not in the data: {not_in_features}"
         
         assert (
             len(self.target_features) > 0

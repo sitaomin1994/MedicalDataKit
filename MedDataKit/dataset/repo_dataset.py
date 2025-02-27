@@ -1649,12 +1649,12 @@ class FetalCTGDataset(Dataset):
         ]
         
         target_features = [
-            'A', 'B', 'C', 'D', 'E', 'AD', 'DE', 'LD', 'FS', 'SUSP',
-            'CLASS', 'NSP'
+            'CLASS', 'A', 'B', 'C', 'D', 'E', 'AD', 'DE', 'LD', 'FS', 'SUSP', 'NSP'
         ]
         sensitive_features = []
         drop_features = []
         task_names = [
+            'predict_pattern_CLASS',
             'predict_pattern_A', 
             'predict_pattern_B', 
             'predict_pattern_C', 
@@ -1665,7 +1665,6 @@ class FetalCTGDataset(Dataset):
             'predict_pattern_LD', 
             'predict_pattern_FS', 
             'predict_pattern_SUSP',
-            'predict_pattern_CLASS',
             'predict_pattern_NSP'
         ]
         
