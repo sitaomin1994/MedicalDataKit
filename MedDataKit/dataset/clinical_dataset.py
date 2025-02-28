@@ -23,6 +23,247 @@ from ..data_pipe_routines.data_type_routines import BasicFeatureTypeHandler
 from ..utils import handle_targets
 
 ###################################################################################################################################
+# Carpediem Dataset
+###################################################################################################################################
+class CarpediemDataset(Dataset):
+    
+    def __init__(self):
+        
+        name = 'carpediem'
+        subject_area = 'Medical'
+        year = 2020
+        url = 'https://physionet.org/content/script-carpediem-dataset/1.1.0/'
+        download_link = 'https://physionet.org/content/script-carpediem-dataset/1.1.0/'
+        description = "CarpeDiem Dataset: demographics, outcomes, and per-day clinical parameters for critically ill patients with suspected pneumonia"
+        notes = 'EHR'
+        data_type = 'mixed'
+        self.pub_link = 'CarpeDiem Dataset: demographics, outcomes, and per-day clinical parameters for critically ill patients with suspected pneumonia'
+        source = 'physionet'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type,
+            source = source
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+    
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
+        # download data
+        if (
+            not os.path.exists(os.path.join(self.data_dir, 'CarpeDiem_dataset.csv'))        
+        ):
+            raise Exception(f'Data {self.name} does not exist in {self.data_dir}, please add the data first')
+        
+        # load raw data
+        data = pd.read_csv(os.path.join(self.data_dir, 'CarpeDiem_dataset.csv'))
+        
+        # long to wide drug
+        # data_md['has_drug'] = 1
+        # data_md_wide = data_md.pivot(index="inpatient.number", columns="Drug_name").reset_index()
+        # data_md_wide.columns = ["inpatient.number"] + [f"Drug_{i}" for i in range(1, data_md_wide.shape[1])]
+        # data_md_wide = data_md_wide.fillna(0)
+        # data = data.merge(data_md_wide, on='inpatient.number')
+        # data = data.drop(columns=['inpatient.number'])
+        data = data.drop(columns = ['Patient_id', 'Patient_id/ICU_stay/ICU_day'])
+        
+        return data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        ordinal_features = ['GCS_eye_opening', 'GCS_verbal_response', 'GCS_motor_response']
+        ordinal_feature_order_dict = {
+            'GCS_eye_opening': [1, 2, 3, 4],
+            'GCS_verbal_response': [1, 2, 3, 4, 5], 
+            'GCS_motor_response': [1, 2, 3, 4, 5, 6],
+        }
+        binary_features = [
+            'External_transfer_flag', 'COVID_status', 'Tracheostomy_flag',
+            'ECMO_flag', 'Intubation_flag', 'Hemodialysis_flag', 'CRRT_flag', 'Gender',
+            'Norepinephrine_flag', 'has_bal', 'Binary_outcome'
+        ]
+
+        multiclass_features = [
+            'Admission_source_name', 'Discharge_disposition', 'Global_cause_failure', 
+            'Patient_category', 'Ethnicity', 'Race', 'Smoking_status', 'Episode_category',
+            'Episode_etiology','Episode_is_cured'
+        ]
+
+        numerical_features = [
+            'Age', 'BMI', 'Admit_SOFA_score', 'Admit_APS_score', 'Cumulative_ICU_days',
+            'Number_of_ICU_stays', 'Cumulative_intubation_days', 'ICU_day', 'ICU_stay',
+            'SOFA_score', 'Temperature', 'Heart_rate', 'Systolic_blood_pressure',
+            'Diastolic_blood_pressure', 'Mean_arterial_pressure', 'Norepinephrine_rate',
+            'Respiratory_rate', 'Oxygen_saturation', 'Urine_output',  'RASS_score', 'PEEP', 'FiO2',
+            'Plateau_Pressure', 'Lung_Compliance', 'PEEP_changes', 'Respiratory_rate_changes',
+            'FiO2_changes', 'ABG_pH', 'ABG_PaCO2', 'ABG_PaO2', 'PaO2FIO2_ratio',
+            'WBC_count', 'Lymphocytes', 'Neutrophils', 'Hemoglobin', 'Platelets',
+            'Bicarbonate', 'Creatinine', 'Albumin', 'Bilirubin', 'CRP', 'D_dimer',
+            'Ferritin', 'LDH', 'Lactic_acid', 'Procalcitonin', 'Episode_duration'
+        ]
+        
+        target_features = ['has_bal']
+        sensitive_features = ['Gender', 'Race', 'Ethnicity', 'Age']
+        drop_features = []
+        task_names = ['predict_has_bal']
+        
+        feature_groups = {
+            'demongraphic': [
+                'External_transfer_flag', 'Admission_source_name',
+                'Patient_category', 'COVID_status', 'Age', 'Ethnicity', 'Gender', 'Race',
+                'Smoking_status', 'BMI', 'Global_cause_failure', 'Cumulative_ICU_days', 'ICU_day', 'ICU_stay',
+                'Admit_SOFA_score', 'Admit_APS_score', 'Tracheostomy_flag'
+            ],
+            'clinical_parameters': [
+                'SOFA_score', 'Temperature', 
+                'ECMO_flag', 'Intubation_flag','CRRT_flag',
+                'Heart_rate', 'Systolic_blood_pressure', 'Diastolic_blood_pressure',
+                'Mean_arterial_pressure', 'Respiratory_rate', 'Oxygen_saturation',
+                'GCS_eye_opening', 'GCS_verbal_response', 'GCS_motor_response',
+                'RASS_score', 'PEEP', 'FiO2', 'Plateau_Pressure', 'Lung_Compliance',
+                'Hemodialysis_flag', 'Urine_output',
+                'CRRT_flag', 'Norepinephrine_flag', 'Norepinephrine_rate',
+                'PEEP_changes', 'Respiratory_rate_changes', 'FiO2_changes',
+                'ABG_pH', 'ABG_PaCO2', 'ABG_PaO2', 'PaO2FIO2_ratio', 'WBC_count',
+                'Lymphocytes', 'Neutrophils', 'Hemoglobin', 'Platelets', 'Bicarbonate',
+                'Creatinine', 'Albumin', 'Bilirubin', 'CRP', 'D_dimer', 'Ferritin',
+                'LDH', 'Lactic_acid', 'Procalcitonin', 'Cumulative_intubation_days'
+            ],
+            'outcomes': [
+                'has_bal', 'Episode_category', 'Episode_etiology',
+                'Episode_is_cured', 'Episode_duration', 'Discharge_disposition', 'Binary_outcome',
+                'Number_of_ICU_stays'
+            ]
+        }
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        if task_name == 'predict_has_bal':
+            target_info = {
+                'target': 'has_bal',
+                'task_type': 'classification'
+            }
+            data = data.drop(columns = [
+                'Episode_category', 'Episode_etiology', 'Episode_is_cured', 'Episode_duration',
+                'Binary_outcome', 'Discharge_disposition', 'Global_cause_failure'
+            ])
+        else:
+            raise ValueError(f"task name {task_name} is not supported")
+        
+        target_features = raw_data_config['target_features']
+        
+        if drop_unused_targets is False:
+            drop_unused_targets = True
+            print(f"Warning: drop_unused_targets is set to True for this dataset")
+        
+        data = handle_targets(data, raw_data_config, drop_unused_targets, target_info['target'])
+        
+        assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Feature engineering
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        
+        ordinal_as_numerical = ml_task_prep_config.ordinal_as_numerical
+        feature_type_handler = BasicFeatureTypeHandler(ordinal_as_numerical)
+        
+        data, numerical_features, categorical_features = feature_type_handler.handle_feature_type(
+            data, data_config
+        )
+        
+        return data, {
+            'numerical_features': numerical_features,
+            'categorical_features': categorical_features,
+        }
+        
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        missing_data_handler = BasicMissingDataHandler(
+            threshold1_num = 0.5,
+            threshold2_num = 0.05,
+            threshold1_cat = 0.6,
+            threshold2_cat = 0.05,
+            impute_num = 'mean',
+            impute_cat = 'other'
+        )
+        data, missing_data_info = missing_data_handler.handle_missing_data(data, categorical_features)
+        
+        return data, missing_data_info
+
+
 # Zigong Heart Failure Dataset
 ###################################################################################################################################
 class ZigongHeartFailureDataset(Dataset):

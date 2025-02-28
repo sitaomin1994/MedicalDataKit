@@ -362,3 +362,154 @@ class GENE3494Dataset(Dataset):
             missing_data_info: dict, missing data processing information
         """
         return data.dropna(), {}
+    
+###################################################################################################
+# Codrna Dataset
+###################################################################################################
+class CodrnaDataset(Dataset):
+
+    def __init__(self):
+        
+        name = 'codrna'
+        subject_area = 'Medical'
+        year = 2020
+        url = 'https://api.openml.org/d/351'
+        download_link = 'https://api.openml.org/d/351'
+        description = "Codrna dataset"
+        notes = 'Bioinformatics'
+        data_type = 'numerical'
+        source = 'openml'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type,
+            source = source
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+    
+    def _load_raw_data(self) -> pd.DataFrame:
+        """
+        Load raw dataset and specify meta data information
+        
+        Returns:
+            raw_data: pd.DataFrame, raw data
+            meta_data: dict, meta data
+        """
+        # download data
+        downloader = OpenMLDownloader(data_id = 351)
+        download_status = downloader._custom_download(data_dir = self.data_dir)
+        if not download_status:
+            raise Exception(f'Failed to download data for {self.name}')
+        
+        # load raw data        
+        raw_data = pd.read_csv(os.path.join(self.data_dir, 'data.csv'))
+
+        return raw_data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+        """
+        Set raw data configuration
+        
+        Returns:
+            raw_data_config: dict, raw data configuration
+        """
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        multiclass_features = []
+        binary_features = ['target']
+        numerical_features = [
+            col for col in raw_data.columns 
+            if col not in binary_features + multiclass_features + ordinal_features
+        ]
+        
+        target_features = ['target']
+        sensitive_features = []
+        drop_features = []
+        task_names = ['predict_target']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'fed_cols': fed_cols
+        }
+    
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+
+        if task_name == 'predict_target':
+            target_info = {
+                'target': 'target',
+                'task_type': 'classification'
+            }
+        
+        assert target_info['target'] in data.columns, f"target {target_info['target']} is not in data columns"
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        return data, {
+            'numerical_features': data_config['numerical_features'],
+            'categorical_features': [],
+        }
+        
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        return data.dropna(), {}

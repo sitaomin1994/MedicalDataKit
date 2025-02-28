@@ -294,7 +294,7 @@ class OpenMLDownloader(DownLoader):
     def _custom_download(self, data_dir: str):
 
         try:
-            download_dir = os.path.join(data_dir, DATA_DOWNLOAD_DIR)
+            download_dir = os.path.join(data_dir)
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
             
@@ -302,8 +302,25 @@ class OpenMLDownloader(DownLoader):
                 return True
             else:
                 from sklearn.datasets import fetch_openml
-                X, y = fetch_openml(data_id=self.data_id, as_frame=True, return_X_y=True)
-                data = X.join(y)
+                import numpy as np
+                import scipy.sparse
+                X, y = fetch_openml(data_id=self.data_id, as_frame='auto', return_X_y=True)
+                # Convert X and y to pandas DataFrame/Series if they aren't already
+                if not isinstance(X, pd.DataFrame):
+                    if isinstance(X, np.ndarray):
+                        X = pd.DataFrame(X, columns = [f'feature_{i}' for i in range(X.shape[1])])
+                    elif isinstance(X, scipy.sparse.csr_matrix):
+                        X = pd.DataFrame(X.toarray(), columns = [f'feature_{i}' for i in range(X.shape[1])])
+                
+                if not isinstance(y, (pd.Series, pd.DataFrame)):
+                    y = pd.Series(y)
+                
+                # Join X and y into single dataframe
+                if isinstance(y, pd.Series):
+                    y = y.to_frame('target')
+                X = X.reset_index(drop=True)
+                y = y.reset_index(drop=True)
+                data = pd.concat([X, y], axis=1)
                 # save the data to the specified path
                 data.to_csv(os.path.join(download_dir, 'data.csv'), index=False)
                 return True
