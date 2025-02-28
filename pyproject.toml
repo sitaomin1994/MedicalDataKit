@@ -24,6 +24,8 @@ xgboost = "^2.1.4"
 shiny = "^1.2.1"
 shinyswatch = "^0.8.0"
 shinylive = "^0.7.3"
+ucimlrepo = "^0.0.7"
+xlrd = "^2.0.1"
 
 
 [tool.poetry.group.dev.dependencies]

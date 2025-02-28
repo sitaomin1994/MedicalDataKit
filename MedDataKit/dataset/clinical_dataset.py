@@ -2831,3 +2831,160 @@ class NasarianCADDataset(Dataset):
         data, missing_data_info = missing_data_handler.handle_missing_data(data, categorical_features)
         assert data.isna().sum().sum() == 0, "Missing data is not handled"
         return data, missing_data_info
+    
+###################################################################################################################################
+# AIDS Clinical Trials Group Study 175 Dataset
+###################################################################################################################################
+class AIDSTrialDataset(Dataset):
+
+    def __init__(self):
+        
+        name = 'aidstrial'
+        subject_area = 'Medical'
+        year = 1999
+        url = 'https://archive.ics.uci.edu/dataset/890/aids+clinical+trials+group+study+175'
+        download_link = None
+        description = "The AIDS Clinical Trials Group Study 175 Dataset contains healthcare statistics" \
+            "and categorical information about patients who have been diagnosed with AIDS. This dataset was" \
+            "initially published in 1996. The prediction task is to predict whether or not each patient died" \
+            "within a certain window of time or not."
+        notes = ''
+        data_type = 'mixed'
+        source = 'uci'
+        
+        super().__init__(
+            name = name,
+            description = description,
+            collection_year = year,
+            subject_area = subject_area,
+            url = url,
+            download_link = download_link,
+            notes = notes,
+            data_type = data_type,
+            source = source
+        )
+        
+        self.data_dir = os.path.join(DATA_DIR, self.name)
+        self.raw_dataset: RawDataset = None
+        self.ml_ready_dataset: MLReadyDataset = None
+        
+    def _load_raw_data(self):
+        
+        # download data
+        if not os.path.exists(os.path.join(self.data_dir, 'data.csv')):
+            raise Exception(f'Data {self.name} does not exist in {self.data_dir}, please add the data first')
+        
+        # load raw data
+        data = pd.read_csv(os.path.join(self.data_dir, 'data.csv'), index_col=0).reset_index(drop=True)
+        data = data.drop(columns = ['zprior'])
+        
+        return data
+    
+    def _set_raw_data_config(self, raw_data: pd.DataFrame) -> dict:
+    
+        # Specify meta data
+        numerical_features = [
+            'time', 'age', 'wtkg', 'karnof', 'preanti',
+            'cd40', 'cd420', 'cd80', 'cd820'
+        ]
+        multiclass_features = ['trt', 'strat']
+        ordinal_features = []
+        ordinal_feature_order_dict = {}
+        binary_features = [
+            'hemo', 'homo', 'drugs', 'oprior', 'z30',
+            'gender', 'str2', 'symptom', 'treat', 'offtrt', 'race', 'cid'
+        ]
+        
+        target_features = ['cid']
+        sensitive_features = ['age', 'race', 'gender']
+        drop_features = []
+        task_names = ['predict_cid']
+        
+        feature_groups = {}
+        fed_cols = []
+        
+        return {
+            'numerical_features': numerical_features,
+            'binary_features': binary_features,
+            'multiclass_features': multiclass_features,
+            'ordinal_features': ordinal_features,
+            'ordinal_feature_order_dict': ordinal_feature_order_dict,
+            'target_features': target_features,
+            'sensitive_features': sensitive_features,
+            'drop_features': drop_features,
+            'feature_groups': feature_groups,
+            'task_names': task_names,
+            'fed_cols': fed_cols
+        }
+
+    def _set_target_feature(
+        self, data: pd.DataFrame, raw_data_config: dict, task_name: str, drop_unused_targets: bool
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name 
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration
+            task_name: str, task name
+            drop_unused_targets: bool, whether to drop unused target features
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        if task_name == 'predict_cid':
+            
+            target_info = {
+                'target': 'cid',
+                'task_type': 'classification'
+            }
+            # data = data.drop(columns = ['time'])
+        else:
+            raise ValueError(f"Invalid task name: {task_name}")
+        
+        assert (target_info['target'] in data.columns), "Target feature not found in data"
+        
+        return data, target_info
+    
+    def _feature_engineering(
+        self, data: pd.DataFrame, data_config: dict, ml_task_prep_config: MLTaskPreparationConfig = None
+    ) -> Tuple[pd.DataFrame, dict]:
+        """
+        Set target feature based on task name
+        
+        Args:
+            data: pd.DataFrame, raw data
+            raw_data_config: dict, raw data configuration {'target', 'task_type'}
+            task_name: str, task name
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            target_info: dict, target information
+        """
+        ordinal_as_numerical = ml_task_prep_config.ordinal_as_numerical
+        feature_type_handler = BasicFeatureTypeHandler(ordinal_as_numerical)
+        
+        data, numerical_features, categorical_features = feature_type_handler.handle_feature_type(
+            data, data_config
+        )
+        
+        return data, {
+            'numerical_features': numerical_features,
+            'categorical_features': categorical_features,
+        }
+    
+    def _handle_missing_data(self, data: pd.DataFrame, categorical_features: list) -> Tuple[pd.DataFrame, dict]:
+        """
+        Handle missing data
+        
+        Args:
+            data: pd.DataFrame, raw data
+            categorical_features: list, categorical features
+            
+        Returns:
+            data: pd.DataFrame, processed data
+            missing_data_info: dict, missing data processing information
+        """
+        
+        return data.dropna(), {}
+
