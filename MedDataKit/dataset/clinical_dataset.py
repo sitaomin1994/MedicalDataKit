@@ -54,7 +54,7 @@ class CarpediemDataset(Dataset):
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
         self.raw_dataset: RawDataset = None
-        self.ml_ready_dataset: MLReadyDataset = None
+        self.ml_ready_dataset: MLTaskDataset = None
     
     def _load_raw_data(self) -> pd.DataFrame:
         """
@@ -155,6 +155,7 @@ class CarpediemDataset(Dataset):
                 'Number_of_ICU_stays'
             ]
         }
+        
         fed_cols = []
         
         return {

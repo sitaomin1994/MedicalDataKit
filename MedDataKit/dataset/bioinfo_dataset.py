@@ -60,7 +60,7 @@ class CodonUsageDataset(Dataset):
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
         self.raw_dataset: RawDataset = None
-        self.ml_ready_dataset: MLReadyDataset = None
+        self.ml_ready_dataset: MLTaskDataset = None
     
     def _load_raw_data(self) -> pd.DataFrame:
         """
@@ -191,7 +191,7 @@ class CodonUsageDataset(Dataset):
 ###################################################################################################################################
 class GENE3494Dataset(Dataset):
 
-    def __init__(self, k = 30):
+    def __init__(self, k = 30, n = 1):
         
         name = 'gene3494'
         subject_area = 'Medical'
@@ -203,6 +203,7 @@ class GENE3494Dataset(Dataset):
         data_type = 'numerical'
         source = 'geo'
         self.k = k  # k - number of gene features to use from each platform
+        self.n = n  # n - number of batch each platform to use
         
         super().__init__(
             name = name,
@@ -218,7 +219,7 @@ class GENE3494Dataset(Dataset):
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
         self.raw_dataset: RawDataset = None
-        self.ml_ready_dataset: MLReadyDataset = None
+        self.ml_ready_dataset: MLTaskDataset = None
         
     def _load_raw_data(self) -> pd.DataFrame:
         """
@@ -236,10 +237,22 @@ class GENE3494Dataset(Dataset):
         df_pheno = pd.read_csv(os.path.join(self.data_dir, 'phenotype_data.csv'))
         
         ttest96.sort_values(by = 'p_value', inplace = True, ascending = True)
-        feature_set96 = ttest96.loc[:self.k, 'feature'].tolist()
+        
+        feature_sets96 = []
+        for i in range(self.n):
+            feature_sets96.append(ttest96.loc[self.k * i:self.k * (i + 1)-1, 'feature'].tolist())
         
         ttest97.sort_values(by = 'p_value', inplace = True, ascending = True)
-        feature_set97 = ttest97.loc[:self.k, 'feature'].tolist()
+        feature_sets97 = []
+        for i in range(self.n):
+            feature_sets97.append(ttest97.loc[self.k * i:self.k * (i + 1)-1, 'feature'].tolist())
+        
+        feature_set96 = []
+        for item in feature_sets96:
+            feature_set96.extend(item)
+        feature_set97 = []
+        for item in feature_sets97:
+            feature_set97.extend(item)
         
         df_gene96 = df_gene96[['ID'] + feature_set96]
         df_gene97 = df_gene97[['ID'] + feature_set97]
@@ -250,11 +263,14 @@ class GENE3494Dataset(Dataset):
         phenotype_features = df_pheno.columns.tolist()
         phenotype_features.remove('ID')
         phenotype_features.remove('DSS_EVENT')
+        
         self.feature_groups = {
             'phenotype': phenotype_features,
-            'gene_96': feature_set96,
-            'gene_97': feature_set97
         }
+        
+        for i in range(self.n):
+            self.feature_groups[f'gene_96_{i}'] = feature_sets96[i]
+            self.feature_groups[f'gene_97_{i}'] = feature_sets97[i]
         
         raw_data = df
 
@@ -285,7 +301,8 @@ class GENE3494Dataset(Dataset):
         drop_features = []
         task_names = ['predict_dss_event']
         
-        feature_groups = {}
+        feature_groups = self.feature_groups
+        feature_groups['phenotype'].append('DSS_EVENT')
         fed_cols = []
         
         return {
@@ -394,7 +411,7 @@ class CodrnaDataset(Dataset):
         
         self.data_dir = os.path.join(DATA_DIR, self.name)
         self.raw_dataset: RawDataset = None
-        self.ml_ready_dataset: MLReadyDataset = None
+        self.ml_ready_dataset: MLTaskDataset = None
     
     def _load_raw_data(self) -> pd.DataFrame:
         """
